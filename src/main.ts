@@ -26,7 +26,7 @@ function setTheme(t: string) {
   const btn = document.getElementById('theme-toggle');
   if (btn) {
     btn.textContent = t === 'dark' ? '🌙' : '☀️';
-    btn.setAttribute('aria-label', `Switch to ${t === 'dark' ? 'light' : 'dark'} theme`);
+    btn.setAttribute('aria-label', `Switch to ${t === 'dark' ? 'light' : 'dark'} mode`);
   }
 }
 
@@ -35,7 +35,7 @@ function setTheme(t: string) {
 // ============================================================
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <header>
-  <button id="theme-toggle" class="theme-toggle" aria-label="Switch theme">🌙</button>
+  <button id="theme-toggle" class="theme-toggle" aria-label="Switch to light mode">🌙</button>
   <h1>Pairing Gate</h1>
   <p class="subtitle">BLS12-381 Signatures &amp; Aggregation</p>
   <a class="portfolio-link" href="https://systemslibrarian.github.io/crypto-lab/">← crypto-lab portfolio</a>

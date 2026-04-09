@@ -19,7 +19,7 @@ crypto-lab-pairing-gate implements BLS signatures and signature aggregation over
 
 [https://systemslibrarian.github.io/crypto-lab-pairing-gate/](https://systemslibrarian.github.io/crypto-lab-pairing-gate/)
 
-Generate BLS keypairs, sign messages, and verify signatures using real BLS12-381 arithmetic. The aggregation visualizer shows up to 100 signers collapsing into a single 48-byte aggregate signature verified with two pairings. The rogue key section demonstrates the attack and explains Ethereum's Proof of Possession defense.
+Generate BLS keypairs, sign messages, and verify signatures using real BLS12-381 arithmetic via `@noble/curves`. The sign/verify section lets you generate a keypair, sign an arbitrary message, verify the pairing equation, and tamper with the signature to observe verification failure. The aggregation visualizer has a signer-count slider (2–100), generates all keypairs and signatures, then animates them collapsing into a single 48-byte aggregate signature verified with two pairings.
 
 ## 4. What Can Go Wrong
 
