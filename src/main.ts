@@ -83,7 +83,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div class="table-wrap">
   <table>
     <caption>BLS12-381 Curve Parameters</caption>
-    <tr><th>Parameter</th><th>Value</th></tr>
+    <tr><th scope="col">Parameter</th><th scope="col">Value</th></tr>
     <tr><td>Embedding degree</td><td>k = 12 (required for efficient pairings)</td></tr>
     <tr><td>Field size</td><td>381 bits</td></tr>
     <tr><td>Scalar field</td><td>~255 bits (r ≈ 2²⁵⁴, matches Ed25519 scalar size)</td></tr>
@@ -139,7 +139,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div class="table-wrap">
   <table>
     <caption>Aggregation Cost Comparison</caption>
-    <tr><th>Approach</th><th>Pairings required</th><th>Verification cost</th></tr>
+    <tr><th scope="col">Approach</th><th scope="col">Pairings required</th><th scope="col">Verification cost</th></tr>
     <tr><td>Verify n signatures individually</td><td>2n</td><td>O(n)</td></tr>
     <tr><td>Aggregate then verify</td><td>2</td><td>O(1)</td></tr>
   </table>
@@ -231,7 +231,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div class="table-wrap">
   <table>
     <caption>Signature Scheme Size Comparison</caption>
-    <tr><th>Scheme</th><th>Public key</th><th>Signature</th><th>Verification</th></tr>
+    <tr><th scope="col">Scheme</th><th scope="col">Public key</th><th scope="col">Signature</th><th scope="col">Verification</th></tr>
     <tr><td>Ed25519</td><td>32 bytes</td><td>64 bytes</td><td>Fast (no pairing)</td></tr>
     <tr><td>ECDSA P-256</td><td>64 bytes</td><td>64 bytes</td><td>Fast (no pairing)</td></tr>
     <tr><td>BLS (G₁ sig, G₂ key)</td><td>96 bytes</td><td>48 bytes</td><td>Slow (2 pairings)</td></tr>
