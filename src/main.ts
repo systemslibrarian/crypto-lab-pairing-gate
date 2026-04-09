@@ -41,6 +41,8 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <a class="portfolio-link" href="https://systemslibrarian.github.io/crypto-lab/">← crypto-lab portfolio</a>
 </header>
 
+<main>
+
 <!-- ======== Section A: What is a pairing? ======== -->
 <section class="demo-section" id="section-a">
   <h2>A — What Is a Pairing?</h2>
@@ -78,7 +80,9 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 
   <h3>A3 — Why BLS12-381 Specifically?</h3>
   <p>Curve parameters:</p>
+  <div class="table-wrap">
   <table>
+    <caption>BLS12-381 Curve Parameters</caption>
     <tr><th>Parameter</th><th>Value</th></tr>
     <tr><td>Embedding degree</td><td>k = 12 (required for efficient pairings)</td></tr>
     <tr><td>Field size</td><td>381 bits</td></tr>
@@ -86,6 +90,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <tr><td>Classical security</td><td>~128 bits</td></tr>
     <tr><td>Quantum security</td><td>~64 bits</td></tr>
   </table>
+  </div>
   <p>BLS12-381 was chosen for Zcash Sapling (2018) and later adopted by Ethereum 2.0 (2020). The "12" in BLS12-381 is the embedding degree; the "381" is the field size in bits.</p>
 </section>
 
@@ -113,7 +118,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <button id="b-verify" disabled>Verify</button>
     <button id="b-tamper" class="danger" disabled>Flip One Bit</button>
   </div>
-  <div id="b-output"></div>
+  <div id="b-output" aria-live="polite"></div>
 </section>
 
 <!-- ======== Section C: Signature Aggregation ======== -->
@@ -131,16 +136,19 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div class="math-block">
     <strong>Verify aggregate:</strong> e(<span class="g1">σ<sub>agg</sub></span>, <span class="g2">G₂</span>) = e(<span class="g1">H(msg)</span>, <span class="g2">PK<sub>agg</sub></span>)
   </div>
+  <div class="table-wrap">
   <table>
+    <caption>Aggregation Cost Comparison</caption>
     <tr><th>Approach</th><th>Pairings required</th><th>Verification cost</th></tr>
     <tr><td>Verify n signatures individually</td><td>2n</td><td>O(n)</td></tr>
     <tr><td>Aggregate then verify</td><td>2</td><td>O(1)</td></tr>
   </table>
+  </div>
 
   <h3>C2 — Live Aggregation Demo</h3>
   <div class="field-group">
     <label for="c-count">Signers: <span id="c-count-display">10</span></label>
-    <input type="range" id="c-count" min="2" max="100" value="10">
+    <input type="range" id="c-count" min="2" max="100" value="10" aria-valuetext="10 signers">
   </div>
   <div class="field-group">
     <label for="c-msg">Message</label>
@@ -152,7 +160,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <button id="c-aggregate" disabled>Aggregate &amp; Verify</button>
   </div>
   <div id="c-grid" class="signer-grid"></div>
-  <div id="c-output"></div>
+  <div id="c-output" aria-live="polite"></div>
 </section>
 
 <!-- ======== Section D: Rogue Key Attack ======== -->
@@ -220,15 +228,20 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   </div>
 
   <h3>E5 — Size Comparison</h3>
+  <div class="table-wrap">
   <table>
+    <caption>Signature Scheme Size Comparison</caption>
     <tr><th>Scheme</th><th>Public key</th><th>Signature</th><th>Verification</th></tr>
     <tr><td>Ed25519</td><td>32 bytes</td><td>64 bytes</td><td>Fast (no pairing)</td></tr>
     <tr><td>ECDSA P-256</td><td>64 bytes</td><td>64 bytes</td><td>Fast (no pairing)</td></tr>
     <tr><td>BLS (G₁ sig, G₂ key)</td><td>96 bytes</td><td>48 bytes</td><td>Slow (2 pairings)</td></tr>
     <tr><td>BLS aggregate (n signers)</td><td>96 bytes</td><td>48 bytes</td><td>Slow (2 pairings)</td></tr>
   </table>
+  </div>
   <p>The last two rows are identical — <strong>n signatures cost the same to verify as 1</strong>. That is the point.</p>
 </section>
+
+</main>
 
 <footer>
   <a href="https://systemslibrarian.github.io/crypto-lab/">crypto-lab portfolio</a>
@@ -256,6 +269,7 @@ interface BKeyState {
 }
 
 let bState: BKeyState | null = null;
+let bKeygenHtml = '';
 
 const bOutput = () => $('#b-output') as HTMLDivElement;
 
@@ -269,7 +283,7 @@ $('#b-keygen').addEventListener('click', () => {
   ($('#b-verify') as HTMLButtonElement).disabled = true;
   ($('#b-tamper') as HTMLButtonElement).disabled = true;
 
-  bOutput().innerHTML = `
+  bKeygenHtml = `
     <div class="output-block">
       <div class="label">Private key (32 bytes)</div>
       <div class="value">${bytesToHex(secretKey)}</div>
@@ -282,6 +296,7 @@ $('#b-keygen').addEventListener('click', () => {
       <div class="timing-item"><span class="timing-label">Keygen:</span><span class="timing-value">${keygenMs}ms</span></div>
     </div>
   `;
+  bOutput().innerHTML = bKeygenHtml;
 });
 
 $('#b-sign').addEventListener('click', () => {
@@ -300,8 +315,7 @@ $('#b-sign').addEventListener('click', () => {
   ($('#b-verify') as HTMLButtonElement).disabled = false;
   ($('#b-tamper') as HTMLButtonElement).disabled = false;
 
-  const existingHtml = bOutput().innerHTML;
-  bOutput().innerHTML = existingHtml + `
+  bOutput().innerHTML = bKeygenHtml + `
     <div class="output-block">
       <div class="label">Signature (48 bytes compressed G₁)</div>
       <div class="value g1">${sig.toHex()}</div>
@@ -401,6 +415,7 @@ const cCountInput = () => $('#c-count') as HTMLInputElement;
 
 cCountInput().addEventListener('input', () => {
   cCountDisplay().textContent = cCountInput().value;
+  cCountInput().setAttribute('aria-valuetext', `${cCountInput().value} signers`);
 });
 
 $('#c-keygen').addEventListener('click', () => {
@@ -464,6 +479,8 @@ $('#c-sign').addEventListener('click', () => {
 
 $('#c-aggregate').addEventListener('click', async () => {
   if (!cHashedMsg || cSigners.some((s) => !s.sig)) return;
+  const aggBtn = $('#c-aggregate') as HTMLButtonElement;
+  aggBtn.disabled = true;
   const n = cSigners.length;
 
   // Animate merge
