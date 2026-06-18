@@ -5,7 +5,7 @@
 
 ## 1. What It Is
 
-crypto-lab-pairing-gate implements BLS signatures and signature aggregation over BLS12-381, a pairing-friendly elliptic curve designed by Sean Bowe for Zcash and adopted by Ethereum 2.0. A bilinear pairing `e: G1 × G2 → GT` is a map satisfying `e(aP, bQ) = e(P, Q)^(ab)`, enabling verification of n aggregated signatures with only two pairing operations regardless of n. The security model is based on the hardness of the elliptic curve discrete logarithm problem and the decisional Diffie-Hellman problem in the pairing target group GT, with approximately 128-bit classical and 64-bit post-quantum security.
+crypto-lab-pairing-gate implements BLS signatures and signature aggregation over BLS12-381, a pairing-friendly elliptic curve designed by Sean Bowe for Zcash and adopted by Ethereum 2.0. A bilinear pairing `e: G1 × G2 → GT` is a map satisfying `e(aP, bQ) = e(P, Q)^(ab)`, enabling verification of n aggregated signatures with only two pairing operations regardless of n. BLS signature unforgeability (EUF-CMA) is proven under the computational co-Diffie-Hellman assumption (co-CDH) in the random-oracle model. Note that the *decisional* Diffie-Hellman problem is **easy** in the source groups G1/G2 — given `(P, aP, bP, cP)` one simply checks `e(aP, bP) = e(P, cP)` — which is precisely the gap-Diffie-Hellman structure that pairings provide. BLS12-381 offers approximately 128-bit classical security and **no** post-quantum security: like every elliptic-curve and pairing-based scheme, it is broken outright by Shor's algorithm on a sufficiently large quantum computer.
 
 ## 2. When to Use It
 
@@ -13,7 +13,7 @@ crypto-lab-pairing-gate implements BLS signatures and signature aggregation over
 - Use BLS12-381 specifically when your application requires pairing-based ZK-SNARK verification (Groth16) alongside signature operations.
 - Do not use BLS when signature verification speed is critical for a single signer — Ed25519 is significantly faster for individual signatures.
 - Do not use naive BLS aggregation without Proof of Possession or equivalent rogue key protection — the rogue key attack allows an attacker to forge aggregate signatures.
-- Do not use BLS for post-quantum security — BLS12-381 provides approximately 64-bit quantum security, which falls below the 128-bit post-quantum threshold.
+- Do not use BLS for post-quantum security — BLS12-381 has no post-quantum security. Shor's algorithm recovers the private key from any public key in polynomial time on a cryptographically relevant quantum computer (CRQC).
 
 ## 3. Live Demo
 
@@ -27,7 +27,7 @@ Generate BLS keypairs, sign messages, and verify signatures using real BLS12-381
 - **Subgroup membership checks:** points presented as G1 or G2 elements must be checked for subgroup membership before use — skipping this check can allow small-subgroup attacks.
 - **Signing the same message across different contexts:** BLS aggregation assumes all signers sign the same message; mixing messages requires per-message pairing checks, losing the O(1) verification benefit.
 - **Implementation bugs in hash-to-curve:** RFC 9380 specifies the hash-to-curve procedure; non-compliant implementations produce points that may not match across libraries.
-- **Post-quantum exposure:** BLS12-381 provides ~64-bit quantum security. Harvest-now-decrypt-later attacks are relevant for long-term secrets.
+- **Post-quantum exposure:** BLS12-381 has no quantum resistance. Once a CRQC exists, any deployed key becomes forgeable and previously recorded signatures lose non-repudiation; migrating to a post-quantum signature scheme is the only mitigation.
 
 ## 5. Real-World Usage
 
