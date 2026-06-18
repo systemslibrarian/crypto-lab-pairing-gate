@@ -1,17 +1,109 @@
-import './style.css';
-import { bls12_381 } from '@noble/curves/bls12-381.js';
+import cssText from './style.css?inline';
+
+// Inject styles synchronously as an inline <style> so there is no
+// render-blocking stylesheet request before first paint.
+{
+  const styleEl = document.createElement('style');
+  styleEl.textContent = cssText;
+  document.head.appendChild(styleEl);
+}
+
+// Crypto is loaded lazily (see loadCrypto) so the heavy BLS12-381 field-tower
+// code never blocks first paint. Types come from a type-only import expression,
+// which is erased at build time and triggers no runtime download.
+type Bls12 = (typeof import('@noble/curves/bls12-381.js'))['bls12_381'];
+type ShortSigs = Bls12['shortSignatures'];
+type PubKey = ReturnType<ShortSigs['getPublicKey']>;
+type Sig = ReturnType<ShortSigs['sign']>;
+type Hashed = ReturnType<ShortSigs['hash']>;
+type G2Point = Bls12['G2']['Point']['BASE'];
+
+let bls12_381!: Bls12;
+let bls!: ShortSigs;
+let G2GEN!: G2Point;
+let cryptoReady: Promise<void> | null = null;
+function loadCrypto(): Promise<void> {
+  if (!cryptoReady) {
+    cryptoReady = import('@noble/curves/bls12-381.js').then((m) => {
+      bls12_381 = m.bls12_381;
+      bls = bls12_381.shortSignatures; // G1 signatures (48 bytes), G2 keys (96 bytes)
+      G2GEN = bls12_381.G2.Point.BASE;
+    });
+  }
+  return cryptoReady;
+}
 
 // ============================================================
 // Helpers
 // ============================================================
-const $ = (sel: string) => document.querySelector(sel)!;
+// Typed query helper — returns the element as the requested type so call
+// sites don't need repeated `as HTMLButtonElement` casts.
+const $ = <T extends Element = HTMLElement>(sel: string): T =>
+  document.querySelector<T>(sel)!;
+
 const bytesToHex = (b: Uint8Array): string =>
   Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+const hexToBytes = (hex: string): Uint8Array => {
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return out;
+};
 const truncHex = (hex: string, bytes = 32): string =>
   hex.length > bytes * 2 ? hex.slice(0, bytes * 2) + '…' : hex;
 
-// BLS shortSignatures: G1 signatures (48 bytes), G2 public keys (96 bytes)
-const bls = bls12_381.shortSignatures;
+// Truncated hex with the first nibble that differs from `other` highlighted.
+const markFirstDiff = (hex: string, other: string, bytes = 32): string => {
+  const shown = hex.slice(0, bytes * 2);
+  let i = 0;
+  while (i < shown.length && shown[i] === other[i]) i++;
+  if (i >= shown.length) return shown + '…';
+  return `${shown.slice(0, i)}<mark class="diff-mark">${shown[i]}</mark>${shown.slice(i + 1)}…`;
+};
+
+// Copy-to-clipboard button (hex is [0-9a-f] only, so safe to inline as an attribute)
+const copyBtn = (text: string, what: string): string =>
+  `<button type="button" class="copy-btn" data-copy="${text}" aria-label="Copy ${what} to clipboard">Copy</button>`;
+
+// Announce a short message in a polite role=status region (screen readers).
+const announce = (id: string, msg: string): void => {
+  const el = document.getElementById(id);
+  if (el) el.textContent = msg;
+};
+
+const setDisabled = (sel: string, v: boolean): void => {
+  $<HTMLButtonElement>(sel).disabled = v;
+};
+
+const pkBytes = (pk: PubKey): Uint8Array => hexToBytes(pk.toHex());
+
+// GT (Fp12) pairing value as a hex string.
+const gtHex = (g1: Sig | Hashed, g2: PubKey | G2Point): string =>
+  bytesToHex(bls12_381.fields.Fp12.toBytes(bls12_381.pairing(g1 as Sig, g2 as PubKey)));
+
+// Yield to the browser so long crypto loops don't freeze the tab. Returns
+// total *compute* time only (idle/paint time during yields is excluded), so
+// the displayed timing stays honest.
+async function timedChunkedLoop(
+  n: number,
+  work: (i: number) => void,
+  onProgress: (done: number) => void,
+): Promise<number> {
+  let computeMs = 0;
+  for (let i = 0; i < n; i++) {
+    const s = performance.now();
+    work(i);
+    computeMs += performance.now() - s;
+    if ((i & 7) === 7 && i < n - 1) {
+      onProgress(i + 1);
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+  }
+  return computeMs;
+}
+
+const reduceMotion = (): boolean =>
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const isNarrow = (): boolean => window.innerWidth < 640;
 
 // ============================================================
 // Theme toggle
@@ -41,7 +133,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <a class="portfolio-link" href="https://systemslibrarian.github.io/crypto-lab/">← crypto-lab portfolio</a>
 </header>
 
-<main>
+<main id="main-content" tabindex="-1">
 
 <!-- ======== Section A: What is a pairing? ======== -->
 <section class="demo-section" id="section-a">
@@ -51,19 +143,19 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <p>BLS12-381 defines three algebraic groups used in pairing-based cryptography:</p>
   <div class="group-boxes">
     <div class="group-box g1">
-      <div class="group-label">G₁</div>
+      <div class="group-label">G₁ <span class="group-tag">source</span></div>
       <div class="group-detail">Points on E(𝔽<sub>p</sub>)<br>48-byte compressed<br>Fast operations</div>
     </div>
     <div class="group-box g2">
-      <div class="group-label">G₂</div>
+      <div class="group-label">G₂ <span class="group-tag">source</span></div>
       <div class="group-detail">Points on E(𝔽<sub>p²</sub>)<br>96-byte compressed<br>Slower operations</div>
     </div>
     <div class="group-box gt">
-      <div class="group-label">G<sub>T</sub></div>
+      <div class="group-label">G<sub>T</sub> <span class="group-tag">target</span></div>
       <div class="group-detail">Target group in 𝔽<sub>p¹²</sub><br>576 bytes<br>Pairing output</div>
     </div>
   </div>
-  <div class="note">BLS12-381 was designed by Sean Bowe (Zcash) to achieve ~128-bit classical security with efficient pairings.</div>
+  <div class="note">BLS12-381 was designed by Sean Bowe (Zcash) to achieve ~128-bit classical security with efficient pairings. The colours <span class="g1">G₁</span>, <span class="g2">G₂</span>, and <span class="gt">G<sub>T</sub></span> are reused throughout this page (each is also labelled in text).</div>
 
   <h3>A2 — The Pairing Operation</h3>
   <p>A pairing <code>e : G₁ × G₂ → G<sub>T</sub></code> is a bilinear map with three key properties:</p>
@@ -71,7 +163,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <strong>Bilinearity:</strong> e(<span class="g1">aP</span>, <span class="g2">bQ</span>) = e(<span class="g1">P</span>, <span class="g2">Q</span>)<sup>ab</sup>
   </div>
   <div class="math-block">
-    <strong>Non-degeneracy:</strong> e(<span class="g1">P</span>, <span class="g2">Q</span>) ≠ 1 &nbsp; for generators P, Q
+    <strong>Non-degeneracy:</strong> e(<span class="g1">P</span>, <span class="g2">Q</span>) ≠ 1 when P, Q are generators
   </div>
   <div class="math-block">
     <strong>Efficiency:</strong> Computable in polynomial time (Ate pairing on BLS12-381)
@@ -83,14 +175,19 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div class="table-wrap">
   <table>
     <caption>BLS12-381 Curve Parameters</caption>
-    <tr><th scope="col">Parameter</th><th scope="col">Value</th></tr>
-    <tr><td>Embedding degree</td><td>k = 12 (required for efficient pairings)</td></tr>
-    <tr><td>Field size</td><td>381 bits</td></tr>
-    <tr><td>Scalar field</td><td>~255 bits (r ≈ 2²⁵⁴, matches Ed25519 scalar size)</td></tr>
-    <tr><td>Classical security</td><td>~128 bits</td></tr>
-    <tr><td>Quantum security</td><td>~64 bits</td></tr>
+    <thead>
+      <tr><th scope="col">Parameter</th><th scope="col">Value</th></tr>
+    </thead>
+    <tbody>
+      <tr><th scope="row">Embedding degree</th><td>k = 12 (required for efficient pairings)</td></tr>
+      <tr><th scope="row">Field size</th><td>381 bits</td></tr>
+      <tr><th scope="row">Scalar field</th><td>255-bit prime order r (≈ 2²⁵⁵; comparable to Ed25519's ~252-bit scalar)</td></tr>
+      <tr><th scope="row">Classical security</th><td>~128 bits</td></tr>
+      <tr><th scope="row">Quantum security</th><td>None — Shor's algorithm recovers sk from PK in polynomial time</td></tr>
+    </tbody>
   </table>
   </div>
+  <p class="note">Like all elliptic-curve and pairing-based schemes, BLS has <strong>no</strong> post-quantum security: a large quantum computer running Shor's algorithm solves the discrete-log problem outright. Grover's algorithm only gives a square-root speedup against <em>symmetric</em> primitives — it does not apply to the discrete-log assumption that secures BLS.</p>
   <p>BLS12-381 was chosen for Zcash Sapling (2018) and later adopted by Ethereum 2.0 (2020). The "12" in BLS12-381 is the embedding degree; the "381" is the field size in bits.</p>
 </section>
 
@@ -99,13 +196,13 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <h2>B — BLS Signature Scheme</h2>
 
   <h3>B1 — The Three Algorithms</h3>
-  <p><strong>Key generation:</strong> Private key sk ∈ ℤ<sub>r</sub> (random scalar). Public key <span style="color:var(--g2-color)">PK = sk · G₂</span> (G₂ point, 96 bytes).</p>
-  <p><strong>Signing:</strong> Hash message to G₁: <span style="color:var(--g1-color)">H = hash_to_curve(message)</span>. Signature: <span style="color:var(--g1-color)">σ = sk · H</span> (G₁ point, 48 bytes).</p>
-  <p><strong>Verification:</strong> Check pairing equation:</p>
+  <p><strong>Key generation:</strong> Private key sk ∈ ℤ<sub>r</sub> (random scalar). Public key <span class="g2">PK = sk · G₂</span> (G₂ point, 96 bytes).</p>
+  <p><strong>Signing:</strong> Hash message to G₁: <span class="g1">H = hash_to_curve(message)</span>. Signature: <span class="g1">σ = sk · H</span> (G₁ point, 48 bytes).</p>
+  <p><strong>Verification:</strong> Check the pairing equation:</p>
   <div class="math-block">
     e(<span class="g1">σ</span>, <span class="g2">G₂</span>) = e(<span class="g1">H</span>, <span class="g2">PK</span>)
   </div>
-  <p>This works because: <code>e(sk·H, G₂) = e(H, G₂)^sk = e(H, sk·G₂) = e(H, PK)</code></p>
+  <p>This works because <code>e(sk·H, G₂) = e(H, G₂)^sk = e(H, sk·G₂) = e(H, PK)</code>. <strong>Verification is nothing more than checking that these two pairings land on the <span class="gt">same G<sub>T</sub> element</span></strong> — the demo below proves that byte-for-byte.</p>
 
   <h3>B2 — Live Sign / Verify</h3>
   <div class="field-group">
@@ -113,12 +210,15 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <input type="text" id="b-msg" value="Ethereum validator attestation: slot 9841203">
   </div>
   <div class="controls">
-    <button id="b-keygen">Generate Keypair</button>
+    <button id="b-keygen" class="primary">Generate Keypair</button>
     <button id="b-sign" disabled>Sign</button>
     <button id="b-verify" disabled>Verify</button>
     <button id="b-tamper" class="danger" disabled>Flip One Bit</button>
+    <button id="b-reset" class="ghost" disabled>Reset</button>
   </div>
-  <div id="b-output" aria-live="polite"></div>
+  <div id="b-verdict" class="verdict-region"></div>
+  <div id="b-output"></div>
+  <p id="b-status" role="status" class="sr-only"></p>
 </section>
 
 <!-- ======== Section C: Signature Aggregation ======== -->
@@ -126,7 +226,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <h2>C — Signature Aggregation</h2>
 
   <h3>C1 — The Aggregation Property</h3>
-  <p>Because pairings are bilinear, BLS signatures from different signers on the same message can be combined:</p>
+  <p>Because pairings are bilinear, BLS signatures from different signers <strong>on the same message</strong> can be combined:</p>
   <div class="math-block">
     <span class="g1">σ<sub>agg</sub></span> = σ₁ + σ₂ + … + σ<sub>n</sub> &nbsp;(point addition in <span class="g1">G₁</span>)
   </div>
@@ -138,29 +238,37 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   </div>
   <div class="table-wrap">
   <table>
-    <caption>Aggregation Cost Comparison</caption>
-    <tr><th scope="col">Approach</th><th scope="col">Pairings required</th><th scope="col">Verification cost</th></tr>
-    <tr><td>Verify n signatures individually</td><td>2n</td><td>O(n)</td></tr>
-    <tr><td>Aggregate then verify</td><td>2</td><td>O(1)</td></tr>
+    <caption>Aggregation Cost Comparison (same message)</caption>
+    <thead>
+      <tr><th scope="col">Approach</th><th scope="col">Pairings required</th><th scope="col">Verification cost</th></tr>
+    </thead>
+    <tbody>
+      <tr><th scope="row">Verify n signatures individually</th><td>2n</td><td>O(n)</td></tr>
+      <tr><th scope="row">Aggregate then verify</th><td>2</td><td>O(1)</td></tr>
+    </tbody>
   </table>
   </div>
+  <p class="note">The drop to <strong>2 pairings</strong> depends on every signer signing the <strong>same</strong> message. If the messages differ, the aggregate no longer collapses and verification costs one pairing per distinct message (O(n)) — see Section D, defense&nbsp;2.</p>
 
   <h3>C2 — Live Aggregation Demo</h3>
   <div class="field-group">
     <label for="c-count">Signers: <span id="c-count-display">10</span></label>
-    <input type="range" id="c-count" min="2" max="100" value="10" aria-valuetext="10 signers">
+    <input type="range" id="c-count" min="2" max="100" value="10" aria-valuetext="10 signers" aria-describedby="c-count-hint">
+    <span id="c-count-hint" class="field-hint">Higher counts do more on-device crypto; 100 signers can take a moment on phones.</span>
   </div>
   <div class="field-group">
     <label for="c-msg">Message</label>
     <input type="text" id="c-msg" value="Block 21847293: propose and attest">
   </div>
   <div class="controls">
-    <button id="c-keygen">Generate All Keypairs</button>
+    <button id="c-keygen" class="primary">Generate All Keypairs</button>
     <button id="c-sign" disabled>Sign All</button>
     <button id="c-aggregate" disabled>Aggregate &amp; Verify</button>
+    <button id="c-reset" class="ghost" disabled>Reset</button>
   </div>
-  <div id="c-grid" class="signer-grid"></div>
-  <div id="c-output" aria-live="polite"></div>
+  <div id="c-grid" class="signer-grid" role="group" aria-label="Signer keypairs"></div>
+  <div id="c-output"></div>
+  <p id="c-status" role="status" class="sr-only"></p>
 </section>
 
 <!-- ======== Section D: Rogue Key Attack ======== -->
@@ -174,25 +282,35 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <div class="key-card">
       <div class="key-card-title">Honest signer</div>
       <p>PK₁ = sk₁ · G₂</p>
-      <p style="color:var(--text-muted);font-size:0.8rem">(Registers key honestly)</p>
+      <p class="key-card-note">(Registers key honestly)</p>
     </div>
     <div class="key-card malicious">
       <div class="key-card-title">⚠ Attacker</div>
       <p>PK₂ = sk₂ · G₂ − PK₁</p>
-      <p style="color:var(--text-muted);font-size:0.8rem">(Maliciously chosen to cancel PK₁)</p>
+      <p class="key-card-note">(Maliciously chosen to cancel PK₁)</p>
     </div>
   </div>
   <p>Aggregate key: PK<sub>agg</sub> = PK₁ + PK₂ = sk₂ · G₂. The attacker signs alone with sk₂ and the aggregate signature verifies — forging a signature that appears to be from both signers.</p>
 
-  <h3>D2 — Defenses</h3>
+  <h3>D2 — Watch It Happen (live)</h3>
+  <p class="note" style="border-left-color:var(--error)">This panel runs <strong>naive, deliberately broken</strong> aggregation with no rogue-key protection — exactly what you must <em>not</em> ship.</p>
+  <div class="controls">
+    <button id="d-attack" class="danger">Forge a 2-of-2 Signature</button>
+    <button id="d-defend" disabled>Apply Proof-of-Possession</button>
+    <button id="d-reset" class="ghost" disabled>Reset</button>
+  </div>
+  <div id="d-output"></div>
+  <p id="d-status" role="status" class="sr-only"></p>
+
+  <h3>D3 — Defenses</h3>
   <div class="defense-list">
     <div class="defense-item">
       <h4>1. Proof of Possession (PoP) — used by Ethereum</h4>
-      <p>Each signer registers a signature of their own public key, proving knowledge of the private key before the public key is accepted. Requires one extra signature per signer during registration — not during signing.</p>
+      <p>Each signer registers a signature of their own public key, proving knowledge of the private key before the public key is accepted. Requires one extra signature per signer during registration — not during signing. The attacker can't produce a valid PoP for a rogue key because they don't know its discrete log.</p>
     </div>
     <div class="defense-item">
       <h4>2. Message Augmentation</h4>
-      <p>Each signer includes their public key in the signed message: sign <code>PK_i ‖ message</code> instead of <code>message</code>. Aggregation still works but requires one pairing per signer during verification (loses the O(1) verification benefit).</p>
+      <p>Each signer includes their public key in the signed message: sign <code>PK_i ‖ message</code> instead of <code>message</code>. Aggregation still works, but because every signer now signs a <em>different</em> message, the aggregate verification needs n+1 pairings (one per distinct message) — it becomes O(n), losing the O(1) benefit.</p>
     </div>
     <div class="defense-item">
       <h4>3. Hash-to-scalar Rogue Key Prevention</h4>
@@ -200,7 +318,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     </div>
   </div>
 
-  <h3>D3 — What Ethereum Does</h3>
+  <h3>D4 — What Ethereum Does</h3>
   <p>Ethereum 2.0 uses Proof of Possession. Validators register a PoP signature (signing their own public key) when depositing 32 ETH. The beacon chain verifies PoP before accepting any validator's key into the active set. After that, aggregation proceeds with the O(1) verification property intact.</p>
 </section>
 
@@ -208,6 +326,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <section class="demo-section" id="section-e">
   <h2>E — Where Pairings Appear</h2>
 
+  <h3>Production Deployments</h3>
   <div class="deployment-grid">
     <div class="deployment-card">
       <h4>Ethereum 2.0 Consensus</h4>
@@ -227,15 +346,19 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     </div>
   </div>
 
-  <h3>E5 — Size Comparison</h3>
+  <h3>Size Comparison</h3>
   <div class="table-wrap">
   <table>
     <caption>Signature Scheme Size Comparison</caption>
-    <tr><th scope="col">Scheme</th><th scope="col">Public key</th><th scope="col">Signature</th><th scope="col">Verification</th></tr>
-    <tr><td>Ed25519</td><td>32 bytes</td><td>64 bytes</td><td>Fast (no pairing)</td></tr>
-    <tr><td>ECDSA P-256</td><td>64 bytes</td><td>64 bytes</td><td>Fast (no pairing)</td></tr>
-    <tr><td>BLS (G₁ sig, G₂ key)</td><td>96 bytes</td><td>48 bytes</td><td>Slow (2 pairings)</td></tr>
-    <tr><td>BLS aggregate (n signers)</td><td>96 bytes</td><td>48 bytes</td><td>Slow (2 pairings)</td></tr>
+    <thead>
+      <tr><th scope="col">Scheme</th><th scope="col">Public key</th><th scope="col">Signature</th><th scope="col">Verification</th></tr>
+    </thead>
+    <tbody>
+      <tr><th scope="row">Ed25519</th><td>32 bytes</td><td>64 bytes</td><td>Fast (no pairing)</td></tr>
+      <tr><th scope="row">ECDSA P-256</th><td>64 bytes</td><td>64 bytes</td><td>Fast (no pairing)</td></tr>
+      <tr><th scope="row">BLS (G₁ sig, G₂ key)</th><td>96 bytes</td><td>48 bytes</td><td>Slow (2 pairings)</td></tr>
+      <tr><th scope="row">BLS aggregate (n signers)</th><td>96 bytes</td><td>48 bytes</td><td>Slow (2 pairings)</td></tr>
+    </tbody>
   </table>
   </div>
   <p>The last two rows are identical — <strong>n signatures cost the same to verify as 1</strong>. That is the point.</p>
@@ -247,6 +370,8 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <a href="https://systemslibrarian.github.io/crypto-lab/">crypto-lab portfolio</a>
   <p class="scripture">"So whether you eat or drink or whatever you do, do it all for the glory of God." — 1 Corinthians 10:31</p>
 </footer>
+
+<p id="copy-status" role="status" class="sr-only"></p>
 `;
 
 // ============================================================
@@ -258,141 +383,268 @@ document.getElementById('theme-toggle')!.addEventListener('click', () => {
 });
 
 // ============================================================
+// Copy-to-clipboard (event delegation for dynamically rendered buttons)
+// ============================================================
+document.addEventListener('click', async (e) => {
+  const btn = (e.target as HTMLElement).closest('.copy-btn') as HTMLButtonElement | null;
+  if (!btn) return;
+  const text = btn.dataset.copy ?? '';
+  try {
+    await navigator.clipboard.writeText(text);
+    btn.classList.add('copied');
+    btn.textContent = 'Copied';
+    announce('copy-status', 'Copied to clipboard.');
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.textContent = 'Copy';
+    }, 1400);
+  } catch {
+    btn.textContent = 'Press Ctrl+C';
+    announce('copy-status', 'Copy failed — press Ctrl+C to copy the selected value.');
+  }
+});
+
+// ============================================================
+// Crypto warm-up: load the library and absorb the one-time lazy field-table
+// init on the FIRST user interaction (not at load), so the heavy BLS eval
+// stays off the initial-render critical path.
+// ============================================================
+let warmed = false;
+async function warmup() {
+  if (warmed) return;
+  warmed = true;
+  try {
+    await loadCrypto();
+    const { secretKey, publicKey } = bls.keygen();
+    const h = bls.hash(new Uint8Array([0x01]));
+    const s = bls.sign(h, secretKey);
+    bls.verify(s, h, publicKey); // exercises the pairing / Fp12 path
+  } catch {
+    /* warm-up is best-effort */
+  }
+}
+for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart'] as const) {
+  window.addEventListener(ev, warmup, { once: true, passive: true });
+}
+
+// ============================================================
 // Section B — BLS Sign / Verify
 // ============================================================
 interface BKeyState {
   sk: Uint8Array;
-  pk: ReturnType<typeof bls.getPublicKey>;
-  sig: ReturnType<typeof bls.sign> | null;
-  hashedMsg: ReturnType<typeof bls.hash> | null;
+  pk: PubKey;
+  sig: Sig | null;
+  hashedMsg: Hashed | null;
   tampered: boolean;
 }
 
 let bState: BKeyState | null = null;
 let bKeygenHtml = '';
 
-const bOutput = () => $('#b-output') as HTMLDivElement;
+const bOutput = () => $<HTMLDivElement>('#b-output');
+const bVerdict = () => $<HTMLDivElement>('#b-verdict');
 
-$('#b-keygen').addEventListener('click', () => {
-  const t0 = performance.now();
-  const { secretKey, publicKey } = bls.keygen();
-  const keygenMs = (performance.now() - t0).toFixed(1);
+const B_HINT = '<p class="empty-hint">Step 1: generate a keypair to begin.</p>';
+bOutput().innerHTML = B_HINT;
 
-  bState = { sk: secretKey, pk: publicKey, sig: null, hashedMsg: null, tampered: false };
-  ($('#b-sign') as HTMLButtonElement).disabled = false;
-  ($('#b-verify') as HTMLButtonElement).disabled = true;
-  ($('#b-tamper') as HTMLButtonElement).disabled = true;
+function resetB() {
+  bState = null;
+  bKeygenHtml = '';
+  bOutput().innerHTML = B_HINT;
+  bVerdict().innerHTML = '';
+  setDisabled('#b-sign', true);
+  setDisabled('#b-verify', true);
+  setDisabled('#b-tamper', true);
+  setDisabled('#b-reset', true);
+  announce('b-status', 'Reset. Generate a keypair to begin.');
+}
 
-  bKeygenHtml = `
-    <div class="output-block">
-      <div class="label">Private key (32 bytes)</div>
-      <div class="value">${bytesToHex(secretKey)}</div>
-    </div>
-    <div class="output-block">
-      <div class="label">Public key (96 bytes compressed G₂)</div>
-      <div class="value g2">${publicKey.toHex()}</div>
-    </div>
-    <div class="timing">
-      <div class="timing-item"><span class="timing-label">Keygen:</span><span class="timing-value">${keygenMs}ms</span></div>
-    </div>
-  `;
-  bOutput().innerHTML = bKeygenHtml;
-});
+$('#b-reset').addEventListener('click', resetB);
 
-$('#b-sign').addEventListener('click', () => {
-  if (!bState) return;
-  const msg = ($('#b-msg') as HTMLInputElement).value;
-  const encoded = new TextEncoder().encode(msg);
-
-  const t0 = performance.now();
-  const hashedMsg = bls.hash(encoded);
-  const sig = bls.sign(hashedMsg, bState.sk);
-  const signMs = (performance.now() - t0).toFixed(1);
-
-  bState.sig = sig;
-  bState.hashedMsg = hashedMsg;
-  bState.tampered = false;
-  ($('#b-verify') as HTMLButtonElement).disabled = false;
-  ($('#b-tamper') as HTMLButtonElement).disabled = false;
-
-  bOutput().innerHTML = bKeygenHtml + `
-    <div class="output-block">
-      <div class="label">Signature (48 bytes compressed G₁)</div>
-      <div class="value g1">${sig.toHex()}</div>
-    </div>
-    <div class="output-block">
-      <div class="label">Hash-to-curve H(msg) (48 bytes G₁)</div>
-      <div class="value g1">${hashedMsg.toHex()}</div>
-    </div>
-    <div class="timing">
-      <div class="timing-item"><span class="timing-label">Sign:</span><span class="timing-value">${signMs}ms</span></div>
-    </div>
-  `;
-});
-
-$('#b-verify').addEventListener('click', () => {
-  if (!bState || !bState.sig || !bState.hashedMsg) return;
-
-  const t0 = performance.now();
-  const valid = bls.verify(bState.sig, bState.hashedMsg, bState.pk);
-  const verifyMs = (performance.now() - t0).toFixed(1);
-
-  // Compute pairing values for display
-  const G2Gen = bls12_381.G2.Point.BASE;
-  const left = bls12_381.pairing(bState.sig, G2Gen);
-  const right = bls12_381.pairing(bState.hashedMsg, bState.pk);
-  const leftHex = bytesToHex(bls12_381.fields.Fp12.toBytes(left));
-  const rightHex = bytesToHex(bls12_381.fields.Fp12.toBytes(right));
-
-  const badge = valid
-    ? '<span class="badge valid">✅ VALID</span>'
-    : '<span class="badge invalid">❌ INVALID</span>';
-
-  const explanation = !valid && bState.tampered
-    ? '<p style="color:var(--error)">The tampered signature produces a different G<sub>T</sub> element than the hash-public-key pairing. The two Fp12 values do not match.</p>'
-    : '';
-
-  bOutput().innerHTML += `
-    <div style="margin-top:0.75rem">${badge}</div>
-    ${explanation}
-    <div class="output-block">
-      <div class="label">e(σ, G₂) — left side</div>
-      <div class="value gt">${truncHex(leftHex)}…</div>
-    </div>
-    <div class="output-block">
-      <div class="label">e(H, PK) — right side</div>
-      <div class="value gt">${truncHex(rightHex)}…</div>
-    </div>
-    <div class="timing">
-      <div class="timing-item"><span class="timing-label">Verify:</span><span class="timing-value">${verifyMs}ms</span></div>
-    </div>
-  `;
-});
-
-$('#b-tamper').addEventListener('click', () => {
-  if (!bState || !bState.sig) return;
-  // Get signature bytes, flip one bit, reconstruct
-  const sigBytes = bls.Signature.toBytes(bState.sig);
-  const tampered = new Uint8Array(sigBytes);
-  // Flip a bit in byte 20 (arbitrary interior byte)
-  tampered[20] ^= 0x01;
-  try {
-    bState.sig = bls.Signature.fromBytes(tampered);
-  } catch {
-    // If the tampered bytes aren't a valid point, flip a different byte
-    tampered[20] ^= 0x01; // undo
-    tampered[10] ^= 0x02;
-    try {
-      bState.sig = bls.Signature.fromBytes(tampered);
-    } catch {
-      // Last resort: just negate the signature to produce a different valid point
-      bState.sig = bState.sig.negate();
-    }
+// Editing the message invalidates a prior signature (it was over the old message).
+$<HTMLInputElement>('#b-msg').addEventListener('input', () => {
+  if (bState?.sig) {
+    bState.sig = null;
+    bState.hashedMsg = null;
+    bState.tampered = false;
+    setDisabled('#b-verify', true);
+    setDisabled('#b-tamper', true);
+    bVerdict().innerHTML = '<p class="empty-hint">Message changed — sign again.</p>';
+    bOutput().innerHTML = bKeygenHtml;
+    announce('b-status', 'Message changed. Sign again.');
   }
-  bState.tampered = true;
-  bOutput().innerHTML += `
-    <div class="note" style="border-left-color:var(--error)">One bit of the signature has been flipped. Click <strong>Verify</strong> to see it fail.</div>
-  `;
+});
+
+$('#b-keygen').addEventListener('click', async () => {
+  try {
+    await loadCrypto();
+    const t0 = performance.now();
+    const { secretKey, publicKey } = bls.keygen();
+    const keygenMs = (performance.now() - t0).toFixed(1);
+
+    bState = { sk: secretKey, pk: publicKey, sig: null, hashedMsg: null, tampered: false };
+    setDisabled('#b-sign', false);
+    setDisabled('#b-verify', true);
+    setDisabled('#b-tamper', true);
+    setDisabled('#b-reset', false);
+    bVerdict().innerHTML = '';
+
+    const skHex = bytesToHex(secretKey);
+    const pkHex = publicKey.toHex();
+    bKeygenHtml = `
+      <div class="output-block">
+        <div class="ob-head"><span class="label">Private key (32 bytes)</span>${copyBtn(skHex, 'private key')}</div>
+        <div class="value">${skHex}</div>
+      </div>
+      <div class="output-block">
+        <div class="ob-head"><span class="label">Public key (96 bytes compressed G₂)</span>${copyBtn(pkHex, 'public key')}</div>
+        <div class="value g2">${pkHex}</div>
+      </div>
+      <div class="timing">
+        <div class="timing-item"><span class="timing-label">Keygen:</span><span class="timing-value">${keygenMs}ms</span></div>
+      </div>
+      <p class="empty-hint">Step 2: sign the message above.</p>
+    `;
+    bOutput().innerHTML = bKeygenHtml;
+    announce('b-status', 'Keypair generated. Now sign the message.');
+  } catch {
+    bVerdict().innerHTML = '<p class="error-text">Key generation failed unexpectedly. Please try again.</p>';
+  }
+});
+
+$('#b-sign').addEventListener('click', async () => {
+  if (!bState) return;
+  try {
+    await loadCrypto();
+    const msg = $<HTMLInputElement>('#b-msg').value;
+    const encoded = new TextEncoder().encode(msg);
+
+    const t0 = performance.now();
+    const hashedMsg = bls.hash(encoded);
+    const sig = bls.sign(hashedMsg, bState.sk);
+    const signMs = (performance.now() - t0).toFixed(1);
+
+    bState.sig = sig;
+    bState.hashedMsg = hashedMsg;
+    bState.tampered = false;
+    setDisabled('#b-verify', false);
+    setDisabled('#b-tamper', false);
+    bVerdict().innerHTML = '';
+
+    const sigHex = sig.toHex();
+    const hHex = hashedMsg.toHex();
+    bOutput().innerHTML =
+      bKeygenHtml.replace(/<p class="empty-hint">Step 2[^<]*<\/p>/, '') +
+      `
+      <div class="output-block">
+        <div class="ob-head"><span class="label">Signature (48 bytes compressed G₁)</span>${copyBtn(sigHex, 'signature')}</div>
+        <div class="value g1">${sigHex}</div>
+      </div>
+      <div class="output-block">
+        <div class="ob-head"><span class="label">Hash-to-curve H(msg) (48 bytes G₁)</span>${copyBtn(hHex, 'hash')}</div>
+        <div class="value g1">${hHex}</div>
+      </div>
+      <div class="timing">
+        <div class="timing-item"><span class="timing-label">Sign:</span><span class="timing-value">${signMs}ms</span></div>
+      </div>
+      <p class="empty-hint">Step 3: verify the pairing equation — or flip a bit to break it.</p>
+    `;
+    announce('b-status', 'Message signed. Now verify, or flip a bit to break it.');
+  } catch {
+    bVerdict().innerHTML = '<p class="error-text">Signing failed unexpectedly. Please try again.</p>';
+  }
+});
+
+$('#b-verify').addEventListener('click', async () => {
+  if (!bState || !bState.sig || !bState.hashedMsg) return;
+  try {
+    await loadCrypto();
+    const t0 = performance.now();
+    const valid = bls.verify(bState.sig, bState.hashedMsg, bState.pk);
+    const verifyMs = (performance.now() - t0).toFixed(1);
+
+    // Pairing values for display, and an authoritative equality from FULL hex.
+    const leftHex = gtHex(bState.sig, G2GEN);
+    const rightHex = gtHex(bState.hashedMsg, bState.pk);
+    const equal = leftHex === rightHex;
+
+    const chip = equal
+      ? '<span class="badge valid">✅ MATCH — identical G_T element</span>'
+      : '<span class="badge invalid">❌ NO MATCH — different G_T elements</span>';
+
+    const lead = equal
+      ? '<p class="verdict-lead valid-text"><strong>e(σ, G₂) = e(H, PK).</strong> Both pairings produced the <em>same</em> G_T element — that equality <em>is</em> the signature check.</p>'
+      : `<p class="verdict-lead error-text"><strong>e(σ, G₂) ≠ e(H, PK).</strong> ${
+          bState.tampered ? 'The altered signature' : 'This signature'
+        } maps to a different G_T element, so verification fails.</p>`;
+
+    const leftShown = equal ? truncHex(leftHex) : markFirstDiff(leftHex, rightHex);
+    const rightShown = equal ? truncHex(rightHex) : markFirstDiff(rightHex, leftHex);
+
+    bVerdict().innerHTML = `
+      <div class="verdict-head">
+        ${valid ? '<span class="badge valid">✅ VALID</span>' : '<span class="badge invalid">❌ INVALID</span>'}
+        ${chip}
+      </div>
+      ${lead}
+      <div class="output-block">
+        <div class="ob-head"><span class="label">e(σ, G₂) — left side</span>${copyBtn(leftHex, 'left pairing value')}</div>
+        <div class="value gt">${leftShown}</div>
+      </div>
+      <div class="output-block">
+        <div class="ob-head"><span class="label">e(H, PK) — right side</span>${copyBtn(rightHex, 'right pairing value')}</div>
+        <div class="value gt">${rightShown}</div>
+      </div>
+      <div class="timing">
+        <div class="timing-item"><span class="timing-label">Verify:</span><span class="timing-value">${verifyMs}ms</span></div>
+      </div>
+    `;
+    announce(
+      'b-status',
+      valid
+        ? 'Signature valid. The pairing e of sigma and G2 equals e of H and PK — the same G_T element.'
+        : 'Signature invalid. The two pairings produced different G_T elements.',
+    );
+  } catch {
+    bVerdict().innerHTML = '<p class="error-text">Verification failed unexpectedly. Please reset and try again.</p>';
+  }
+});
+
+$('#b-tamper').addEventListener('click', async () => {
+  if (!bState || !bState.sig) return;
+  try {
+    await loadCrypto();
+    const sigBytes = bls.Signature.toBytes(bState.sig);
+    let note = '';
+    let done = false;
+
+    // Try flipping one bit in a few interior bytes until we land on a valid,
+    // different G₁ point. Report honestly which byte changed.
+    for (const idx of [20, 10, 30, 5, 40]) {
+      const tampered = new Uint8Array(sigBytes);
+      tampered[idx] ^= 0x01;
+      try {
+        bState.sig = bls.Signature.fromBytes(tampered);
+        note = `One bit of the signature was flipped (byte ${idx}). Click <strong>Verify</strong> to watch the pairing check fail.`;
+        done = true;
+        break;
+      } catch {
+        /* not a valid point encoding — try another byte */
+      }
+    }
+    if (!done) {
+      // Fallback: negate the signature (always a distinct valid point).
+      bState.sig = bState.sig.negate();
+      note = 'The signature was replaced with its negation (−σ), a different valid point. Click <strong>Verify</strong> to watch the pairing check fail.';
+    }
+
+    bState.tampered = true;
+    setDisabled('#b-verify', false);
+    bVerdict().innerHTML = `<div class="note" style="border-left-color:var(--error)">${note}</div>`;
+    announce('b-status', 'Signature altered. Verify to see it fail.');
+  } catch {
+    bVerdict().innerHTML = '<p class="error-text">Could not alter the signature. Please reset and try again.</p>';
+  }
 });
 
 // ============================================================
@@ -401,47 +653,111 @@ $('#b-tamper').addEventListener('click', () => {
 interface Signer {
   index: number;
   sk: Uint8Array;
-  pk: ReturnType<typeof bls.getPublicKey>;
-  sig: ReturnType<typeof bls.sign> | null;
+  pk: PubKey;
+  sig: Sig | null;
 }
 
 let cSigners: Signer[] = [];
-let cHashedMsg: ReturnType<typeof bls.hash> | null = null;
+let cHashedMsg: Hashed | null = null;
 
-const cGrid = () => $('#c-grid') as HTMLDivElement;
-const cOutput = () => $('#c-output') as HTMLDivElement;
-const cCountDisplay = () => $('#c-count-display') as HTMLSpanElement;
-const cCountInput = () => $('#c-count') as HTMLInputElement;
+const cGrid = () => $<HTMLDivElement>('#c-grid');
+const cOutput = () => $<HTMLDivElement>('#c-output');
+const cCountDisplay = () => $<HTMLSpanElement>('#c-count-display');
+const cCountInput = () => $<HTMLInputElement>('#c-count');
+
+const C_HINT = '<p class="empty-hint">Step 1: pick the number of signers, then generate keypairs.</p>';
+cOutput().innerHTML = C_HINT;
+
+function resetC() {
+  cSigners = [];
+  cHashedMsg = null;
+  cGrid().innerHTML = '';
+  cGrid().setAttribute('aria-busy', 'false');
+  cOutput().innerHTML = C_HINT;
+  setDisabled('#c-sign', true);
+  setDisabled('#c-aggregate', true);
+  setDisabled('#c-reset', true);
+  announce('c-status', 'Reset. Generate keypairs to begin.');
+}
+
+$('#c-reset').addEventListener('click', resetC);
 
 cCountInput().addEventListener('input', () => {
   cCountDisplay().textContent = cCountInput().value;
   cCountInput().setAttribute('aria-valuetext', `${cCountInput().value} signers`);
+  // Changing the count invalidates any existing signer set.
+  if (cSigners.length) {
+    cSigners = [];
+    cHashedMsg = null;
+    cGrid().innerHTML = '';
+    cOutput().innerHTML = '<p class="empty-hint">Signer count changed — generate keypairs again.</p>';
+    setDisabled('#c-sign', true);
+    setDisabled('#c-aggregate', true);
+  }
 });
 
-$('#c-keygen').addEventListener('click', () => {
+// Changing the message invalidates existing signatures.
+$<HTMLInputElement>('#c-msg').addEventListener('input', () => {
+  if (cSigners.some((s) => s.sig)) {
+    cHashedMsg = null;
+    cSigners.forEach((s) => (s.sig = null));
+    renderSignerGrid(false);
+    setDisabled('#c-aggregate', true);
+    cOutput().innerHTML = '<p class="empty-hint">Message changed — sign again.</p>';
+    announce('c-status', 'Message changed. Sign again.');
+  }
+});
+
+$('#c-keygen').addEventListener('click', async () => {
+  await loadCrypto();
   const n = parseInt(cCountInput().value);
   cSigners = [];
+  cHashedMsg = null;
 
-  const t0 = performance.now();
-  for (let i = 0; i < n; i++) {
-    const { secretKey, publicKey } = bls.keygen();
-    cSigners.push({ index: i + 1, sk: secretKey, pk: publicKey, sig: null });
+  setDisabled('#c-keygen', true);
+  setDisabled('#c-sign', true);
+  setDisabled('#c-aggregate', true);
+  const label = $<HTMLButtonElement>('#c-keygen');
+  const originalLabel = 'Generate All Keypairs';
+  cGrid().setAttribute('aria-busy', 'true');
+
+  try {
+    const computeMs = await timedChunkedLoop(
+      n,
+      (i) => {
+        const { secretKey, publicKey } = bls.keygen();
+        cSigners.push({ index: i + 1, sk: secretKey, pk: publicKey, sig: null });
+      },
+      (done) => {
+        label.textContent = `Generating… ${done}/${n}`;
+      },
+    );
+
+    setDisabled('#c-sign', false);
+    setDisabled('#c-reset', false);
+    renderSignerGrid(false);
+    cOutput().innerHTML = `
+      <div class="timing">
+        <div class="timing-item"><span class="timing-label">${n} keypairs:</span><span class="timing-value">${computeMs.toFixed(1)}ms</span></div>
+      </div>
+      <p class="empty-hint">Step 2: sign all ${n} keypairs over the message.</p>
+    `;
+    announce('c-status', `${n} keypairs generated. Now sign all.`);
+  } catch {
+    cOutput().innerHTML = '<p class="error-text">Key generation failed unexpectedly. Please reset and try again.</p>';
+  } finally {
+    label.textContent = originalLabel;
+    setDisabled('#c-keygen', false);
+    cGrid().setAttribute('aria-busy', 'false');
   }
-  const keygenMs = (performance.now() - t0).toFixed(1);
-
-  ($('#c-sign') as HTMLButtonElement).disabled = false;
-  ($('#c-aggregate') as HTMLButtonElement).disabled = true;
-
-  renderSignerGrid(false);
-  cOutput().innerHTML = `
-    <div class="timing">
-      <div class="timing-item"><span class="timing-label">${n} keypairs:</span><span class="timing-value">${keygenMs}ms</span></div>
-    </div>
-  `;
 });
 
+// Cap the number of rendered cards on small screens so 100 signers don't
+// produce a giant wall (the full set is always kept in cSigners for the math).
 function renderSignerGrid(showSig: boolean) {
-  const cards = cSigners.map((s) => {
+  const cap = isNarrow() ? 15 : cSigners.length;
+  const shown = cSigners.slice(0, cap);
+  const cards = shown.map((s) => {
     const pkHex = truncHex(s.pk.toHex(), 8);
     const sigHex = s.sig ? truncHex(s.sig.toHex(), 8) : '—';
     return `
@@ -449,96 +765,300 @@ function renderSignerGrid(showSig: boolean) {
         <div class="signer-index">#${s.index}</div>
         <div class="signer-pk">PK: ${pkHex}</div>
         ${showSig ? `<div class="signer-sig">σ: ${sigHex}</div>` : ''}
-        ${showSig && s.sig ? '<span class="badge valid" style="font-size:0.7rem;margin-top:0.25rem">✅</span>' : ''}
+        ${
+          showSig && s.sig
+            ? '<span class="badge valid card-badge"><span aria-hidden="true">✅</span><span class="sr-only">signed</span></span>'
+            : ''
+        }
       </div>
     `;
   });
+  if (cSigners.length > cap) {
+    cards.push(
+      `<div class="signer-card more-card">+${cSigners.length - cap} more<br><span class="more-note">(all included in aggregation)</span></div>`,
+    );
+  }
   cGrid().innerHTML = cards.join('');
 }
 
-$('#c-sign').addEventListener('click', () => {
-  const msg = ($('#c-msg') as HTMLInputElement).value;
+$('#c-sign').addEventListener('click', async () => {
+  if (!cSigners.length) return;
+  await loadCrypto();
+  const msg = $<HTMLInputElement>('#c-msg').value;
   const encoded = new TextEncoder().encode(msg);
 
-  const t0 = performance.now();
-  cHashedMsg = bls.hash(encoded);
-  for (const s of cSigners) {
-    s.sig = bls.sign(cHashedMsg, s.sk);
+  setDisabled('#c-sign', true);
+  setDisabled('#c-keygen', true);
+  const label = $<HTMLButtonElement>('#c-sign');
+
+  try {
+    cHashedMsg = bls.hash(encoded);
+    const hashed = cHashedMsg;
+    const computeMs = await timedChunkedLoop(
+      cSigners.length,
+      (i) => {
+        cSigners[i].sig = bls.sign(hashed, cSigners[i].sk);
+      },
+      (done) => {
+        label.textContent = `Signing… ${done}/${cSigners.length}`;
+      },
+    );
+
+    setDisabled('#c-aggregate', false);
+    renderSignerGrid(true);
+    cOutput().innerHTML = `
+      <div class="timing">
+        <div class="timing-item"><span class="timing-label">${cSigners.length} signatures:</span><span class="timing-value">${computeMs.toFixed(1)}ms</span></div>
+      </div>
+      <p class="empty-hint">Step 3: aggregate all ${cSigners.length} signatures into one and verify.</p>
+    `;
+    announce('c-status', `${cSigners.length} signatures created. Now aggregate and verify.`);
+  } catch {
+    cOutput().innerHTML = '<p class="error-text">Signing failed unexpectedly. Please reset and try again.</p>';
+  } finally {
+    label.textContent = 'Sign All';
+    setDisabled('#c-keygen', false);
   }
-  const signMs = (performance.now() - t0).toFixed(1);
-
-  ($('#c-aggregate') as HTMLButtonElement).disabled = false;
-  renderSignerGrid(true);
-
-  cOutput().innerHTML += `
-    <div class="timing">
-      <div class="timing-item"><span class="timing-label">${cSigners.length} signs:</span><span class="timing-value">${signMs}ms</span></div>
-    </div>
-  `;
 });
 
 $('#c-aggregate').addEventListener('click', async () => {
   if (!cHashedMsg || cSigners.some((s) => !s.sig)) return;
-  const aggBtn = $('#c-aggregate') as HTMLButtonElement;
-  aggBtn.disabled = true;
-  const n = cSigners.length;
+  await loadCrypto();
 
-  // Animate merge
-  const cards = cGrid().querySelectorAll('.signer-card');
-  cards.forEach((card, i) => {
-    setTimeout(() => card.classList.add('merging'), i * 30);
-  });
-
-  await new Promise((r) => setTimeout(r, Math.min(n * 30 + 400, 3400)));
-
-  // Aggregate
+  // Snapshot BEFORE any await so a concurrent keygen/sign can't corrupt us.
+  const hashed = cHashedMsg;
   const sigs = cSigners.map((s) => s.sig!);
   const pks = cSigners.map((s) => s.pk);
+  const n = sigs.length;
 
-  const t0 = performance.now();
-  const aggSig = bls.aggregateSignatures(sigs);
-  const aggPk = bls.aggregatePublicKeys(pks);
-  const aggMs = (performance.now() - t0).toFixed(1);
+  const cKeygen = $<HTMLButtonElement>('#c-keygen');
+  const cSign = $<HTMLButtonElement>('#c-sign');
+  const prevKeygen = cKeygen.disabled;
+  const prevSign = cSign.disabled;
+  setDisabled('#c-aggregate', true);
+  cKeygen.disabled = true;
+  cSign.disabled = true;
+  cGrid().setAttribute('aria-busy', 'true');
 
-  const t1 = performance.now();
-  const aggValid = bls.verify(aggSig, cHashedMsg, aggPk);
-  const aggVerifyMs = (performance.now() - t1).toFixed(1);
+  try {
+    // Animate the merge (skipped under reduced-motion). The wait tracks the
+    // number of cards actually in the DOM, not the full signer count.
+    if (!reduceMotion()) {
+      const cards = cGrid().querySelectorAll('.signer-card');
+      cards.forEach((card, i) => setTimeout(() => card.classList.add('merging'), i * 30));
+      const total = cards.length;
+      await new Promise((r) => setTimeout(r, Math.min(total * 30 + 400, isNarrow() ? 1200 : 2200)));
+    }
 
-  // Estimate individual verify time
-  const t2 = performance.now();
-  bls.verify(sigs[0], cHashedMsg, pks[0]);
-  const singleVerifyMs = performance.now() - t2;
-  const estIndividualMs = (singleVerifyMs * n).toFixed(1);
+    const t0 = performance.now();
+    const aggSig = bls.aggregateSignatures(sigs);
+    const aggPk = bls.aggregatePublicKeys(pks);
+    const aggMs = (performance.now() - t0).toFixed(1);
 
-  const savings = ((1 - parseFloat(aggVerifyMs) / parseFloat(estIndividualMs)) * 100).toFixed(0);
+    const t1 = performance.now();
+    const aggValid = bls.verify(aggSig, hashed, aggPk);
+    const aggVerifyMs = performance.now() - t1;
 
-  // Show merged card
-  cGrid().innerHTML = `
-    <div class="signer-card aggregate">
-      <div class="signer-index">Aggregated (${n} signers)</div>
-      <div class="output-block" style="margin:0.5rem 0">
-        <div class="label">Aggregate Signature (48 bytes G₁)</div>
-        <div class="value g1">${aggSig.toHex()}</div>
+    // Surface the aggregate pairing equality explicitly (this is the n→1 payoff).
+    const aggLeftHex = gtHex(aggSig, G2GEN);
+    const aggRightHex = gtHex(hashed, aggPk);
+    const aggEqual = aggLeftHex === aggRightHex;
+
+    // Honest individual estimate: median of a small warm sample × n
+    // (bounded work — never n verifies, which would freeze at n=100).
+    bls.verify(sigs[0], hashed, pks[0]); // warm-up, discarded
+    const k = Math.min(5, n);
+    const samples: number[] = [];
+    for (let i = 0; i < k; i++) {
+      const s = performance.now();
+      bls.verify(sigs[i % n], hashed, pks[i % n]);
+      samples.push(performance.now() - s);
+    }
+    samples.sort((a, b) => a - b);
+    const medianVerify = samples[Math.floor(samples.length / 2)];
+    const estIndividualMs = medianVerify * n;
+
+    const aggSigHex = aggSig.toHex();
+    const aggPkHex = aggPk.toHex();
+
+    cGrid().innerHTML = `
+      <div class="signer-card aggregate">
+        <div class="signer-index">Aggregated (${n} signers)</div>
+        <div class="output-block" style="margin:0.5rem 0">
+          <div class="ob-head"><span class="label">Aggregate Signature (48 bytes G₁)</span>${copyBtn(aggSigHex, 'aggregate signature')}</div>
+          <div class="value g1">${truncHex(aggSigHex)}</div>
+        </div>
+        <div class="output-block" style="margin:0.5rem 0">
+          <div class="ob-head"><span class="label">Aggregate Public Key (96 bytes G₂)</span>${copyBtn(aggPkHex, 'aggregate public key')}</div>
+          <div class="value g2">${truncHex(aggPkHex)}</div>
+        </div>
+        <div class="output-block" style="margin:0.5rem 0">
+          <div class="ob-head"><span class="label">e(σ_agg, G₂) — left side</span>${copyBtn(aggLeftHex, 'left pairing value')}</div>
+          <div class="value gt">${aggEqual ? truncHex(aggLeftHex) : markFirstDiff(aggLeftHex, aggRightHex)}</div>
+        </div>
+        <div class="output-block" style="margin:0.5rem 0">
+          <div class="ob-head"><span class="label">e(H, PK_agg) — right side</span>${copyBtn(aggRightHex, 'right pairing value')}</div>
+          <div class="value gt">${aggEqual ? truncHex(aggRightHex) : markFirstDiff(aggRightHex, aggLeftHex)}</div>
+        </div>
+        <div class="verdict-head" style="margin-top:0.5rem">
+          ${aggValid ? '<span class="badge valid">✅ AGGREGATE VALID</span>' : '<span class="badge invalid">❌ AGGREGATE INVALID</span>'}
+          ${aggEqual ? '<span class="badge valid">✅ MATCH — identical G_T element</span>' : '<span class="badge invalid">❌ NO MATCH</span>'}
+        </div>
+        <p class="verdict-lead">Every signer's pairing contribution adds in the exponent, so all n pairings collapse into this single equality — that is why ${n} signatures verify with just 2 pairings.</p>
       </div>
-      <div class="output-block" style="margin:0.5rem 0">
-        <div class="label">Aggregate Public Key (96 bytes G₂)</div>
-        <div class="value g2">${aggPk.toHex()}</div>
-      </div>
-      <div style="margin-top:0.5rem">
-        ${aggValid ? '<span class="badge valid">✅ AGGREGATE VALID</span>' : '<span class="badge invalid">❌ AGGREGATE INVALID</span>'}
-      </div>
-    </div>
-  `;
+    `;
 
-  cOutput().innerHTML = `
-    <div class="metric-banner">
-      <strong>${n} signatures → 1 verification</strong><br>
-      Individual: ${estIndividualMs}ms &nbsp;|&nbsp; Aggregate verify: ${aggVerifyMs}ms &nbsp;|&nbsp; Savings: ${savings}%
-    </div>
-    <div class="timing">
-      <div class="timing-item"><span class="timing-label">Aggregation:</span><span class="timing-value">${aggMs}ms</span></div>
-      <div class="timing-item"><span class="timing-label">Agg verify:</span><span class="timing-value">${aggVerifyMs}ms</span></div>
-      <div class="timing-item"><span class="timing-label">Est. individual (×${n}):</span><span class="timing-value">${estIndividualMs}ms</span></div>
-    </div>
-  `;
+    const finite = Number.isFinite(estIndividualMs) && estIndividualMs > 0;
+    const savings = finite
+      ? Math.max(0, Math.min(100, (1 - aggVerifyMs / estIndividualMs) * 100)).toFixed(0)
+      : '—';
+
+    cOutput().innerHTML = `
+      <div class="metric-banner">
+        <strong>${n} signatures → 1 verification</strong><br>
+        Verification work: <strong>${2 * n} pairings</strong> individually vs <strong>2 pairings</strong> aggregated.
+      </div>
+      <div class="timing">
+        <div class="timing-item"><span class="timing-label">Aggregation:</span><span class="timing-value">${aggMs}ms</span></div>
+        <div class="timing-item"><span class="timing-label">Agg verify (measured):</span><span class="timing-value">${aggVerifyMs.toFixed(1)}ms</span></div>
+        <div class="timing-item"><span class="timing-label">Est. individual ≈ (×${n}):</span><span class="timing-value">${finite ? estIndividualMs.toFixed(1) : '—'}ms</span></div>
+        <div class="timing-item"><span class="timing-label">≈ time saved:</span><span class="timing-value">${savings}%</span></div>
+      </div>
+      <p class="field-hint">Timings are approximate single-run samples; the exact, machine-independent truth is the pairing count above (2n vs 2).</p>
+    `;
+
+    if (!reduceMotion()) cGrid().scrollIntoView({ block: 'nearest' });
+    announce(
+      'c-status',
+      `${n} signatures aggregated into one and verified with 2 pairings instead of ${2 * n}. Result: ${aggValid ? 'valid' : 'invalid'}.`,
+    );
+  } catch {
+    cOutput().innerHTML = '<p class="error-text">Aggregation failed unexpectedly. Please reset and try again.</p>';
+  } finally {
+    cGrid().setAttribute('aria-busy', 'false');
+    // Aggregate consumes the grid; leave it disabled on success. Restore siblings.
+    cKeygen.disabled = prevKeygen;
+    cSign.disabled = prevSign;
+  }
+});
+
+// ============================================================
+// Section D — Rogue Key Attack (live)
+// ============================================================
+interface DState {
+  honest: ReturnType<typeof bls.keygen>;
+  attacker: ReturnType<typeof bls.keygen>;
+  roguePk: PubKey;
+}
+let dState: DState | null = null;
+
+const dOutput = () => $<HTMLDivElement>('#d-output');
+
+function resetD() {
+  dState = null;
+  dOutput().innerHTML = '';
+  setDisabled('#d-defend', true);
+  setDisabled('#d-reset', true);
+  announce('d-status', 'Reset.');
+}
+
+$('#d-reset').addEventListener('click', resetD);
+
+$('#d-attack').addEventListener('click', async () => {
+  try {
+    await loadCrypto();
+    const honest = bls.keygen();
+    const attacker = bls.keygen();
+    // PK2 = sk2·G2 − PK1 — the attacker subtracts the honest key from their own.
+    const roguePk = attacker.publicKey.subtract(honest.publicKey);
+    dState = { honest, attacker, roguePk };
+
+    const msg = 'Transfer 1000 ETH to the attacker';
+    const H = bls.hash(new TextEncoder().encode(msg));
+    // Attacker signs ALONE with sk2 — the honest signer never participates.
+    const forged = bls.sign(H, attacker.secretKey);
+    const aggPk = bls.aggregatePublicKeys([honest.publicKey, roguePk]);
+    const forgedValid = bls.verify(forged, H, aggPk);
+
+    const pk1 = honest.publicKey.toHex();
+    const rogue = roguePk.toHex();
+    const agg = aggPk.toHex();
+
+    dOutput().innerHTML = `
+      <div class="output-block">
+        <div class="ob-head"><span class="label">Honest signer PK₁ = sk₁·G₂</span>${copyBtn(pk1, 'honest public key')}</div>
+        <div class="value g2">${truncHex(pk1)}</div>
+      </div>
+      <div class="output-block">
+        <div class="ob-head"><span class="label">Rogue PK₂ = sk₂·G₂ − PK₁</span>${copyBtn(rogue, 'rogue public key')}</div>
+        <div class="value g2">${truncHex(rogue)}</div>
+      </div>
+      <div class="output-block">
+        <div class="ob-head"><span class="label">Aggregate PK₁ + PK₂ (= sk₂·G₂)</span>${copyBtn(agg, 'aggregate public key')}</div>
+        <div class="value g2">${truncHex(agg)}</div>
+      </div>
+      <div class="verdict-head" style="margin-top:0.5rem">
+        ${
+          forgedValid
+            ? '<span class="badge invalid">❌ FORGERY ACCEPTED</span>'
+            : '<span class="badge valid">✅ forgery rejected</span>'
+        }
+      </div>
+      <p class="verdict-lead error-text">The attacker signed <strong>alone</strong> with sk₂, yet the signature verifies against the 2-of-2 aggregate key — appearing to prove the honest signer endorsed <em>"${msg}"</em>. The honest signer never touched it.</p>
+      <p class="empty-hint">Now apply the Proof-of-Possession defense to see the rogue key rejected at registration.</p>
+    `;
+    setDisabled('#d-defend', false);
+    setDisabled('#d-reset', false);
+    announce('d-status', 'Rogue-key forgery accepted by naive aggregation. Apply Proof-of-Possession to defend.');
+  } catch {
+    dOutput().innerHTML = '<p class="error-text">The attack demo failed unexpectedly. Please reset and try again.</p>';
+  }
+});
+
+$('#d-defend').addEventListener('click', async () => {
+  if (!dState) return;
+  try {
+    await loadCrypto();
+    const { honest, attacker, roguePk } = dState;
+
+    // A Proof of Possession is a BLS signature over one's OWN public key.
+    // Honest signer can produce a valid PoP for PK1.
+    const honestPopMsg = bls.hash(pkBytes(honest.publicKey));
+    const honestPop = bls.sign(honestPopMsg, honest.secretKey);
+    const honestPopValid = bls.verify(honestPop, honestPopMsg, honest.publicKey);
+
+    // The attacker doesn't know the discrete log of the rogue key (it is
+    // sk₂ − sk₁, and sk₁ is secret), so the best PoP they can forge — signing
+    // the rogue key with sk₂ — does NOT verify against the rogue key.
+    const roguePopMsg = bls.hash(pkBytes(roguePk));
+    const roguePopAttempt = bls.sign(roguePopMsg, attacker.secretKey);
+    const roguePopValid = bls.verify(roguePopAttempt, roguePopMsg, roguePk);
+
+    dOutput().innerHTML = `
+      <div class="output-block">
+        <div class="ob-head"><span class="label">Honest key — PoP check</span></div>
+        <div class="value">${
+          honestPopValid
+            ? '<span class="badge valid">✅ PoP VALID — key accepted</span>'
+            : '<span class="badge invalid">❌ PoP invalid</span>'
+        }</div>
+      </div>
+      <div class="output-block">
+        <div class="ob-head"><span class="label">Rogue key — PoP check</span></div>
+        <div class="value">${
+          roguePopValid
+            ? '<span class="badge invalid">❌ PoP VALID (unexpected)</span>'
+            : '<span class="badge valid">✅ PoP INVALID — key rejected</span>'
+        }</div>
+      </div>
+      <p class="verdict-lead valid-text">With Proof of Possession, the registry rejects the rogue key before it ever enters the aggregate set — the attacker can't prove knowledge of its private key. This is exactly what Ethereum's beacon chain enforces at validator deposit time.</p>
+    `;
+    setDisabled('#d-defend', true);
+    announce(
+      'd-status',
+      'Proof-of-Possession accepts the honest key and rejects the rogue key, preventing the forgery.',
+    );
+  } catch {
+    dOutput().innerHTML = '<p class="error-text">The defense demo failed unexpectedly. Please reset and try again.</p>';
+  }
 });

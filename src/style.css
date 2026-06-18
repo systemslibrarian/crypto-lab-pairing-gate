@@ -10,8 +10,11 @@
   --surface-alt: #1a2035;
   --text: #e2e8f0;
   --text-muted: #94a3b8;
-  --accent: #f59e0b;
+  --accent: #f59e0b;        /* used for non-text: borders, focus rings, fills */
+  --accent-text: #f59e0b;   /* used for accent-coloured TEXT (AA on dark) */
   --accent-hover: #fbbf24;
+  --accent-fill-hover: #fbbf24; /* brighter amber for fill hover (dark text stays AA) */
+  --on-accent: #111827;     /* text/icon colour on an accent fill */
   --border: #1e293b;
   --code-bg: #151c2c;
   --g1-color: #38bdf8;
@@ -29,15 +32,18 @@
   --surface-alt: #f1f5f9;
   --text: #1e293b;
   --text-muted: #64748b;
-  --accent: #d97706;
-  --accent-hover: #b45309;
+  --accent: #d97706;        /* non-text: borders, focus rings, fills */
+  --accent-text: #b45309;   /* accent-coloured TEXT — ≥4.58:1 on surfaces (AA) */
+  --accent-hover: #92400e;
+  --accent-fill-hover: #f59e0b; /* brighter amber for fill hover (dark text ≈ 8.6:1) */
+  --on-accent: #1c1206;     /* dark text on amber fill (#1c1206 on #d97706 ≈ 5.6:1) */
   --border: #e2e8f0;
   --code-bg: #f1f5f9;
   --g1-color: #0369a1;
-  --g2-color: #7c3aed;
-  --gt-color: #db2777;
-  --success: #059669;
-  --warning: #d97706;
+  --g2-color: #6d28d9;
+  --gt-color: #be185d;      /* ≥5.5:1 on code-bg / surface-alt (was #db2777, 4.2:1) */
+  --success: #047857;
+  --warning: #b45309;
   --error: #dc2626;
 }
 
@@ -62,6 +68,7 @@ body {
   color: var(--text);
   line-height: 1.6;
   min-height: 100vh;
+  min-height: 100dvh; /* avoids mobile URL-bar jump; ignored where unsupported */
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -113,13 +120,24 @@ p {
 }
 
 a {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: none;
 }
 
 a:hover {
   color: var(--accent-hover);
   text-decoration: underline;
+}
+
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Skip-link lands focus on <main>; don't show an outline on the container itself */
+main:focus {
+  outline: none;
 }
 
 code, .mono {
@@ -149,7 +167,9 @@ pre {
 #app {
   max-width: 960px;
   margin: 0 auto;
-  padding: 1rem 1.5rem 3rem;
+  /* env() insets keep content clear of notches/rounded corners on viewport-fit=cover */
+  padding: 1rem calc(1.5rem + env(safe-area-inset-right)) 3rem
+    calc(1.5rem + env(safe-area-inset-left));
 }
 
 header {
@@ -170,7 +190,7 @@ header .portfolio-link {
   display: inline-block;
   font-size: 0.85rem;
   margin-top: 0.5rem;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ---------- Theme toggle ---------- */
@@ -179,8 +199,8 @@ header .portfolio-link {
   top: 0;
   right: 0;
   z-index: 10;
-  width: 2.6rem;
-  height: 2.6rem;
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: 50%;
   border: 1px solid var(--border);
   background: var(--surface);
@@ -251,6 +271,16 @@ section.demo-section h2 {
   font-size: 0.85rem;
 }
 
+/* Group source/target tag */
+.group-tag {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+  font-weight: 600;
+  /* inherits the full (non-dimmed) group colour so it stays ≥4.5:1 */
+}
+
 /* ---------- Math blocks ---------- */
 .math-block {
   background: var(--code-bg);
@@ -268,22 +298,32 @@ section.demo-section h2 {
 .math-block .g2 { color: var(--g2-color); }
 .math-block .gt { color: var(--gt-color); }
 
+/* color-coded inline group references in prose */
+.g1 { color: var(--g1-color); }
+.g2 { color: var(--g2-color); }
+.gt { color: var(--gt-color); }
+
 /* ---------- Buttons ---------- */
 button {
   font-family: inherit;
   font-size: 0.9rem;
+  min-height: 2.75rem; /* 44px — comfortable touch target */
   padding: 0.5rem 1.1rem;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--surface-alt);
   color: var(--text);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
 button:hover:not(:disabled) {
   background: var(--accent);
-  color: var(--background);
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 
@@ -299,13 +339,26 @@ button:disabled {
 
 button.primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border-color: var(--accent);
+  font-weight: 600;
 }
 
-button.primary:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
+button.primary:hover:not(:disabled) {
+  background: var(--accent-fill-hover);
+  color: var(--on-accent);
+  border-color: var(--accent-fill-hover);
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+button.ghost:hover:not(:disabled) {
+  background: var(--surface-alt);
+  color: var(--text);
+  border-color: var(--accent);
 }
 
 button.danger {
@@ -323,16 +376,18 @@ button.danger:hover:not(:disabled) {
 input[type="text"],
 input[type="range"] {
   font-family: inherit;
-  font-size: 0.9rem;
 }
 
 input[type="text"] {
   background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 0.5rem 0.75rem;
+  padding: 0.6rem 0.75rem;
+  /* 16px keeps iOS Safari from auto-zooming when the field gains focus */
+  font-size: 1rem;
   color: var(--text);
   width: 100%;
+  min-height: 2.75rem;
 }
 
 input[type="text"]:focus {
@@ -342,7 +397,15 @@ input[type="text"]:focus {
 
 input[type="range"] {
   width: 100%;
+  height: 1.75rem; /* larger hit area for the slider thumb */
   accent-color: var(--accent);
+  cursor: pointer;
+}
+
+input[type="range"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
 }
 
 .controls {
@@ -399,6 +462,121 @@ input[type="range"] {
 .output-block .value.g2 { color: var(--g2-color); }
 .output-block .value.gt { color: var(--gt-color); }
 
+/* Header row inside an output block: label on the left, copy button on the right */
+.output-block .ob-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.output-block .ob-head .label {
+  margin-bottom: 0;
+}
+
+/* ---------- Copy button ---------- */
+.copy-btn {
+  flex: none;
+  min-height: 1.9rem;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.7rem;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.copy-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+
+.copy-btn.copied {
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.copy-btn.copied:hover {
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  color: var(--success);
+}
+
+/* ---------- Screen-reader-only utility ---------- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Hints, verdicts, inline status ---------- */
+.empty-hint {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-style: italic;
+  margin: 0.5rem 0;
+}
+
+.field-hint {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-top: 0.3rem;
+}
+
+.error-text {
+  color: var(--error);
+  font-size: 0.9rem;
+}
+
+.valid-text {
+  color: var(--success);
+}
+
+.verdict-region {
+  margin: 0.75rem 0;
+}
+
+.verdict-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.verdict-lead {
+  font-size: 0.92rem;
+  margin: 0.5rem 0 0.75rem;
+  color: var(--text);
+}
+
+/* First differing nibble between two non-matching G_T values */
+.diff-mark {
+  background: var(--error);
+  color: #fff;
+  border-radius: 2px;
+  padding: 0 1px;
+  font-weight: 700;
+}
+
+.key-card-note {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
 /* ---------- Status badges ---------- */
 .badge {
   display: inline-block;
@@ -442,7 +620,7 @@ input[type="range"] {
 }
 
 .timing .timing-item .timing-value {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
   font-family: 'SF Mono', monospace;
 }
@@ -460,7 +638,7 @@ input[type="range"] {
 }
 
 .metric-banner strong {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ---------- Tables ---------- */
@@ -487,6 +665,12 @@ th {
   background: var(--surface-alt);
   font-weight: 600;
   color: var(--text);
+}
+
+/* Row headers (first column): labelled but lighter than column headers */
+tbody th {
+  font-weight: 500;
+  background: color-mix(in srgb, var(--surface-alt) 55%, transparent);
 }
 
 td {
@@ -529,6 +713,25 @@ td {
   color: var(--g1-color);
   font-family: 'SF Mono', monospace;
   font-size: 0.7rem;
+}
+
+.signer-card .card-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  margin-top: 0.25rem;
+}
+
+.signer-card.more-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.signer-card.more-card .more-note {
+  font-weight: 400;
+  font-size: 0.65rem;
 }
 
 .signer-card.merging {
@@ -588,7 +791,7 @@ td {
 }
 
 .defense-item h4 {
-  color: var(--accent);
+  color: var(--accent-text);
   margin-bottom: 0.4rem;
 }
 
@@ -639,7 +842,8 @@ footer .scripture {
 /* ---------- Responsive ---------- */
 @media (max-width: 640px) {
   #app {
-    padding: 0.75rem 1rem 2rem;
+    padding: 0.75rem calc(1rem + env(safe-area-inset-right)) 2rem
+      calc(1rem + env(safe-area-inset-left));
   }
 
   h1 { font-size: 1.5rem; }
@@ -672,10 +876,69 @@ footer .scripture {
   }
 }
 
+/* ---------- Touch devices: full-size hit areas ---------- */
+@media (pointer: coarse) {
+  .copy-btn {
+    min-height: 2.75rem; /* 44px */
+    padding: 0.45rem 0.85rem;
+  }
+  input[type="range"] {
+    height: 2.75rem; /* larger thumb hit area on touch */
+  }
+}
+
+/* ---------- Very narrow screens: keep title clear of the toggle ---------- */
+@media (max-width: 400px) {
+  header {
+    padding-top: 3.25rem;
+  }
+  .theme-toggle {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+}
+
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- Forced colors (Windows High Contrast) ---------- */
+@media (forced-colors: active) {
+  .group-box,
+  .signer-card,
+  .key-card,
+  .defense-item,
+  .deployment-card,
+  .output-block,
+  .math-block,
+  .metric-banner,
+  button,
+  input[type="text"] {
+    border: 1px solid CanvasText;
+  }
+
+  .badge.valid,
+  .badge.invalid {
+    border: 1px solid CanvasText;
+    color: CanvasText;
+  }
+
+  /* Group colors collapse to system colors in forced-colors mode, so keep
+     the colored borders meaningful by leaving the top accent visible. */
+  .group-box.g1, .group-box.g2, .group-box.gt {
+    border-top: 3px solid Highlight;
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  a:focus-visible,
+  .theme-toggle:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
   }
 }
