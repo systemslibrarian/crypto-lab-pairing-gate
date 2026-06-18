@@ -292,6 +292,8 @@ section.demo-section h2 {
   text-align: center;
   margin: 1rem 0;
   overflow-x: auto;
+  /* let long equations wrap at spaces instead of clipping/scrolling on phones */
+  overflow-wrap: break-word;
 }
 
 .math-block .g1 { color: var(--g1-color); }
