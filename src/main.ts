@@ -368,6 +368,11 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 
 <footer>
   <a href="https://systemslibrarian.github.io/crypto-lab/">crypto-lab portfolio</a>
+  <p class="related-demos">Related demos:
+    <a href="https://systemslibrarian.github.io/crypto-lab-ibe-gate/">crypto-lab-ibe-gate</a> ·
+    <a href="https://systemslibrarian.github.io/crypto-lab-frost-threshold/">crypto-lab-frost-threshold</a> ·
+    <a href="https://systemslibrarian.github.io/crypto-lab-ed25519-forge/">crypto-lab-ed25519-forge</a> ·
+    <a href="https://systemslibrarian.github.io/crypto-lab-zk-proof-lab/">crypto-lab-zk-proof-lab</a></p>
   <p class="scripture">"So whether you eat or drink or whatever you do, do it all for the glory of God." — 1 Corinthians 10:31</p>
 </footer>
 
