@@ -5,6 +5,7 @@
 
 /* ---------- Custom properties: Dark theme (default) ---------- */
 [data-theme="dark"] {
+  color-scheme: dark;
   --background: #0a0e1a;
   --surface: #111827;
   --surface-alt: #1a2035;
@@ -20,18 +21,21 @@
   --g1-color: #38bdf8;
   --g2-color: #a78bfa;
   --gt-color: #f472b6;
-  --success: #34d399;
+  --success: #34d399;       /* bright hue: borders, swatches, fills */
+  --success-text: #34d399;  /* text on tinted success fills (AA on dark) */
   --warning: #fbbf24;
-  --error: #f87171;
+  --error: #f87171;         /* bright hue: borders, swatches, fills */
+  --error-text: #f87171;    /* text on tinted error fills (AA on dark) */
 }
 
 /* ---------- Custom properties: Light theme ---------- */
 [data-theme="light"] {
+  color-scheme: light;
   --background: #f8fafc;
   --surface: #ffffff;
   --surface-alt: #f1f5f9;
   --text: #1e293b;
-  --text-muted: #64748b;
+  --text-muted: #556070;    /* ≥5.6:1 on surface-alt (#64748b was 4.34:1, failed AA) */
   --accent: #d97706;        /* non-text: borders, focus rings, fills */
   --accent-text: #b45309;   /* accent-coloured TEXT — ≥4.58:1 on surfaces (AA) */
   --accent-hover: #92400e;
@@ -42,9 +46,11 @@
   --g1-color: #0369a1;
   --g2-color: #6d28d9;
   --gt-color: #be185d;      /* ≥5.5:1 on code-bg / surface-alt (was #db2777, 4.2:1) */
-  --success: #047857;
+  --success: #047857;       /* bright hue: borders, swatches, fills */
+  --success-text: #025a43;  /* darker text for ≥4.5:1 on tinted success fills */
   --warning: #b45309;
-  --error: #dc2626;
+  --error: #dc2626;         /* bright hue: borders, swatches, fills */
+  --error-text: #a81f1f;    /* darker text for ≥4.5:1 on tinted error fills */
 }
 
 /* ---------- Reset & base ---------- */
@@ -60,11 +66,14 @@ html {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Own background-color so WebKit paints the canvas with the theme colour
+     (not a promoted, transparent-reported body background). */
+  background-color: var(--background);
 }
 
 body {
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  background: var(--background);
+  background-color: var(--background);
   color: var(--text);
   line-height: 1.6;
   min-height: 100vh;
@@ -500,13 +509,13 @@ input[type="range"]:focus-visible {
 
 .copy-btn.copied {
   background: color-mix(in srgb, var(--success) 18%, transparent);
-  color: var(--success);
+  color: var(--success-text);
   border-color: var(--success);
 }
 
 .copy-btn.copied:hover {
   background: color-mix(in srgb, var(--success) 18%, transparent);
-  color: var(--success);
+  color: var(--success-text);
 }
 
 /* ---------- Screen-reader-only utility ---------- */
@@ -539,12 +548,12 @@ input[type="range"]:focus-visible {
 }
 
 .error-text {
-  color: var(--error);
+  color: var(--error-text);
   font-size: 0.9rem;
 }
 
 .valid-text {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .verdict-region {
@@ -590,13 +599,13 @@ input[type="range"]:focus-visible {
 
 .badge.valid {
   background: color-mix(in srgb, var(--success) 15%, transparent);
-  color: var(--success);
+  color: var(--success-text);
   border: 1px solid var(--success);
 }
 
 .badge.invalid {
   background: color-mix(in srgb, var(--error) 15%, transparent);
-  color: var(--error);
+  color: var(--error-text);
   border: 1px solid var(--error);
 }
 
@@ -776,7 +785,7 @@ td {
 }
 
 .key-card.malicious .key-card-title {
-  color: var(--error);
+  color: var(--error-text);
 }
 
 /* ---------- Defense list ---------- */
