@@ -126,10 +126,17 @@ function setTheme(t: string) {
 // Render HTML
 // ============================================================
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-<header>
-  <button id="theme-toggle" class="theme-toggle" aria-label="Switch to light mode">🌙</button>
-  <h1>Pairing Gate</h1>
-  <p class="subtitle">BLS12-381 Signatures &amp; Aggregation</p>
+<button id="theme-toggle" class="theme-toggle" aria-label="Switch to light mode">🌙</button>
+<header class="cl-hero">
+  <div class="cl-hero-main">
+    <h1 class="cl-hero-title">Pairing Gate</h1>
+    <p class="cl-hero-sub">BLS Signatures · BLS12-381</p>
+    <p class="cl-hero-desc">Generate keypairs, sign and verify with real pairing arithmetic, then watch n signatures aggregate into one that verifies with a constant 2 pairings.</p>
+  </div>
+  <aside class="cl-hero-why" aria-label="Why it matters">
+    <span class="cl-hero-why-label">WHY IT MATTERS</span>
+    <p class="cl-hero-why-text">Aggregate BLS signatures collapse thousands of validator votes into one constant-size check — the reason Ethereum's consensus depends on them. That same bilinearity enables the rogue-key attack, and its Proof-of-Possession fix.</p>
+  </aside>
   <a class="portfolio-link" href="https://systemslibrarian.github.io/crypto-lab/">← crypto-lab portfolio</a>
 </header>
 
