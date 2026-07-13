@@ -593,6 +593,168 @@ input[type="range"]:focus-visible {
   font-size: 0.8rem;
 }
 
+/* ---------- Section A: plain-English lead-in ---------- */
+.lead-in {
+  color: var(--text);
+  font-size: 1rem;
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface-alt));
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  padding: 0.85rem 1.1rem;
+  margin: 0.5rem 0 1.25rem;
+}
+
+/* ---------- "Gory details" expandable ---------- */
+.gory-details {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+  margin: 0.75rem 0;
+}
+
+.gory-details > summary {
+  cursor: pointer;
+  padding: 0.7rem 1rem;
+  font-weight: 600;
+  color: var(--accent-text);
+  font-size: 0.92rem;
+  list-style-position: inside;
+}
+
+.gory-details > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+.gory-details[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.gory-body {
+  padding: 0.75rem 1rem 0.25rem;
+}
+
+.gory-body p { color: var(--text-muted); }
+
+/* ---------- Bilinearity playground ---------- */
+.playground-output {
+  margin: 0.75rem 0;
+}
+
+.pg-row {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.85rem;
+  margin: 0.5rem 0;
+}
+
+.pg-expr {
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+
+.pg-expr-name {
+  color: var(--gt-color);
+  font-weight: 700;
+}
+
+.pg-value {
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.78rem;
+  word-break: break-all;
+  line-height: 1.6;
+}
+
+/* Full 576-byte reveal wraps rather than scrolls, so no focusable scroll
+   region is needed for axe (scrollable-region-focusable) and the whole value
+   is visible at once — the equality is airtight, not a truncated prefix. */
+.pg-value.full,
+.value.gt-full {
+  word-break: break-all;
+}
+
+/* ---------- Full-value reveal button (playground + verify) ---------- */
+.reveal-btn {
+  min-height: 1.9rem;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.72rem;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.reveal-btn:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+
+/* ---------- Hash-to-curve explainer aside ---------- */
+.explainer {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--g1-color);
+  border-radius: 0 8px 8px 0;
+  background: var(--surface-alt);
+  padding: 0.85rem 1.1rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.explainer-head {
+  font-weight: 700;
+  color: var(--g1-color);
+  margin-bottom: 0.35rem;
+  font-size: 0.95rem;
+}
+
+.explainer-body p {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 0.6rem;
+}
+
+.htc-visual {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+  padding: 0.5rem 0.2rem 0.1rem;
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.8rem;
+}
+
+.htc-bytes {
+  color: var(--text);
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.25rem 0.5rem;
+}
+
+.htc-arrow { color: var(--text-muted); }
+
+.htc-curve {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--g1-color);
+}
+
+.htc-curve svg { width: 90px; height: 46px; }
+
+.htc-dot {
+  fill: var(--g1-color);
+  stroke: var(--surface);
+  stroke-width: 1;
+}
+
+.htc-label { color: var(--text-muted); }
+
 /* ---------- Status badges ---------- */
 .badge {
   display: inline-block;
@@ -750,9 +912,17 @@ td {
   font-size: 0.65rem;
 }
 
-.signer-card.merging {
+/* Mechanism-revealing merge: signature cards fly toward the σ_agg pile (left)
+   and key cards toward the PK_agg pile (right), literally depicting the two
+   point-addition sums before the surviving pairings are drawn. */
+.signer-card.flying {
   opacity: 0;
-  transform: scale(0.3) translateX(-50px);
+}
+.signer-card.fly-left.flying {
+  transform: translateX(-45%) translateY(60px) scale(0.35);
+}
+.signer-card.fly-right.flying {
+  transform: translateX(45%) translateY(60px) scale(0.35);
 }
 
 .signer-card.aggregate {
@@ -761,6 +931,118 @@ td {
   border-color: var(--accent);
   font-size: 0.85rem;
   padding: 1rem;
+}
+
+/* ---------- Aggregation mechanism diagram ---------- */
+.agg-diagram {
+  margin: 0.25rem 0 1rem;
+}
+
+.agg-sums {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.agg-sum {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.7rem 0.85rem;
+  text-align: center;
+  background: var(--surface);
+}
+
+.agg-sum.g1-tint { border-top: 3px solid var(--g1-color); }
+.agg-sum.g2-tint { border-top: 3px solid var(--g2-color); }
+
+.agg-sum-op {
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.85rem;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.agg-sum-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin: 0.2rem 0;
+}
+
+.agg-sum-eq {
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+/* The two surviving pairing arrows, converging on the single G_T node below. */
+.agg-pairings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin: 0.55rem 0 0.15rem;
+}
+
+.agg-arrow {
+  text-align: center;
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.agg-arrow-line {
+  display: block;
+  font-size: 1.35rem;
+  line-height: 1.1;
+  color: var(--accent-text);
+}
+
+.agg-arrow.g2-arrow .agg-arrow-line { text-align: left; }
+.agg-arrow.g1-arrow .agg-arrow-line { text-align: right; }
+
+.agg-gt-node {
+  border: 2px solid var(--gt-color);
+  border-radius: 10px;
+  padding: 0.7rem 1rem;
+  text-align: center;
+  background: color-mix(in srgb, var(--gt-color) 8%, var(--surface));
+  max-width: 26rem;
+  margin: 0 auto;
+}
+
+.agg-gt-node.nomatch {
+  border-color: var(--error);
+  background: color-mix(in srgb, var(--error) 8%, var(--surface));
+}
+
+.agg-gt-title {
+  font-weight: 700;
+  color: var(--gt-color);
+  margin-bottom: 0.25rem;
+}
+
+.agg-gt-node.nomatch .agg-gt-title { color: var(--error-text); }
+
+.agg-gt-hex {
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.75rem;
+  margin-bottom: 0.4rem;
+  word-break: break-all;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .agg-diagram .agg-sum,
+  .agg-diagram .agg-arrow,
+  .agg-diagram .agg-gt-node {
+    animation: agg-fade-up 0.5s ease both;
+  }
+  .agg-diagram .agg-arrow { animation-delay: 0.28s; }
+  .agg-diagram .agg-gt-node { animation-delay: 0.5s; }
+}
+
+@keyframes agg-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ---------- Attack visual ---------- */
@@ -871,6 +1153,16 @@ footer .scripture {
 
   .attack-visual {
     grid-template-columns: 1fr;
+  }
+
+  .agg-sums,
+  .agg-pairings {
+    grid-template-columns: 1fr;
+  }
+
+  .agg-arrow.g1-arrow .agg-arrow-line,
+  .agg-arrow.g2-arrow .agg-arrow-line {
+    text-align: center;
   }
 
   .signer-grid {

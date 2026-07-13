@@ -17,9 +17,11 @@ type PubKey = ReturnType<ShortSigs['getPublicKey']>;
 type Sig = ReturnType<ShortSigs['sign']>;
 type Hashed = ReturnType<ShortSigs['hash']>;
 type G2Point = Bls12['G2']['Point']['BASE'];
+type G1Point = Bls12['G1']['Point']['BASE'];
 
 let bls12_381!: Bls12;
 let bls!: ShortSigs;
+let G1GEN!: G1Point;
 let G2GEN!: G2Point;
 let cryptoReady: Promise<void> | null = null;
 function loadCrypto(): Promise<void> {
@@ -27,6 +29,7 @@ function loadCrypto(): Promise<void> {
     cryptoReady = import('@noble/curves/bls12-381.js').then((m) => {
       bls12_381 = m.bls12_381;
       bls = bls12_381.shortSignatures; // G1 signatures (48 bytes), G2 keys (96 bytes)
+      G1GEN = bls12_381.G1.Point.BASE;
       G2GEN = bls12_381.G2.Point.BASE;
     });
   }
@@ -79,6 +82,16 @@ const pkBytes = (pk: PubKey): Uint8Array => hexToBytes(pk.toHex());
 // GT (Fp12) pairing value as a hex string.
 const gtHex = (g1: Sig | Hashed, g2: PubKey | G2Point): string =>
   bytesToHex(bls12_381.fields.Fp12.toBytes(bls12_381.pairing(g1 as Sig, g2 as PubKey)));
+
+// Full 576-byte G_T (Fp12) value from a raw pairing of a G1 and G2 point.
+const pairHex = (g1: G1Point, g2: G2Point): string =>
+  bytesToHex(bls12_381.fields.Fp12.toBytes(bls12_381.pairing(g1 as Sig, g2 as PubKey)));
+
+// e(P,Q)^k as a full 576-byte hex string (Fp12 exponentiation of a pairing value).
+const pairPowHex = (g1: G1Point, g2: G2Point, k: bigint): string => {
+  const Fp12 = bls12_381.fields.Fp12;
+  return bytesToHex(Fp12.toBytes(Fp12.pow(bls12_381.pairing(g1 as Sig, g2 as PubKey), k)));
+};
 
 // Yield to the browser so long crypto loops don't freeze the tab. Returns
 // total *compute* time only (idle/paint time during yields is excluded), so
@@ -146,7 +159,27 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <section class="demo-section" id="section-a">
   <h2>A — What Is a Pairing?</h2>
 
-  <h3>A1 — The Three Groups</h3>
+  <p class="lead-in">In one sentence: <strong>a pairing is a special kind of multiplication that lets you check a hidden relationship between two secrets without ever learning the secrets themselves.</strong> Feed it one point from group <span class="g1">G₁</span> and one from group <span class="g2">G₂</span>, and it returns a single value in a third group <span class="gt">G<sub>T</sub></span>. The one magical rule it obeys — that scalars slide freely between the two inputs — is what makes both BLS verification and thousand-signature aggregation possible. The playground below lets you <em>feel</em> that rule before we name any of the machinery.</p>
+
+  <h3>A1 — Bilinearity Playground</h3>
+  <p>Bilinearity is the single load-bearing property of the whole demo. It says: multiplying an input point by a scalar is the <em>same</em> as raising the pairing's output to that scalar. So four computations that look completely different —</p>
+  <div class="math-block">
+    e(<span class="g1">aP</span>, <span class="g2">bQ</span>) &nbsp;=&nbsp; e(<span class="g1">P</span>, <span class="g2">Q</span>)<sup>ab</sup> &nbsp;=&nbsp; e(<span class="g1">abP</span>, <span class="g2">Q</span>) &nbsp;=&nbsp; e(<span class="g1">P</span>, <span class="g2">abQ</span>)
+  </div>
+  <p>— must all land on the <strong>exact same <span class="gt">G<sub>T</sub></span> element</strong>. Drag <code>a</code> and <code>b</code> and watch four unrelated-looking pairings collapse onto one identical value, computed live with real BLS12-381 arithmetic (P = G₁ generator, Q = G₂ generator).</p>
+  <div class="field-group">
+    <label for="pg-a">Scalar a = <span id="pg-a-display">3</span></label>
+    <input type="range" id="pg-a" min="1" max="20" value="3" aria-valuetext="a equals 3">
+  </div>
+  <div class="field-group">
+    <label for="pg-b">Scalar b = <span id="pg-b-display">5</span></label>
+    <input type="range" id="pg-b" min="1" max="20" value="5" aria-valuetext="b equals 5">
+  </div>
+  <div id="pg-output" class="playground-output"></div>
+  <p id="pg-status" role="status" class="sr-only"></p>
+  <p class="note">This is exactly why pairings are useful: they let a scalar (like a secret key) move from one side of an equation to the other. Signature verification is just this identity with <code>a = sk</code>: <code>e(sk·H, G₂) = e(H, sk·G₂)</code>. Non-degeneracy (below) guarantees the output isn't the trivial value 1, so the equality actually carries information.</p>
+
+  <h3>A2 — The Three Groups</h3>
   <p>BLS12-381 defines three algebraic groups used in pairing-based cryptography:</p>
   <div class="group-boxes">
     <div class="group-box g1">
@@ -164,7 +197,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   </div>
   <div class="note">BLS12-381 was designed by Sean Bowe (Zcash) to achieve ~128-bit classical security with efficient pairings. The colours <span class="g1">G₁</span>, <span class="g2">G₂</span>, and <span class="gt">G<sub>T</sub></span> are reused throughout this page (each is also labelled in text).</div>
 
-  <h3>A2 — The Pairing Operation</h3>
+  <h3>A3 — The Pairing's Three Properties</h3>
   <p>A pairing <code>e : G₁ × G₂ → G<sub>T</sub></code> is a bilinear map with three key properties:</p>
   <div class="math-block">
     <strong>Bilinearity:</strong> e(<span class="g1">aP</span>, <span class="g2">bQ</span>) = e(<span class="g1">P</span>, <span class="g2">Q</span>)<sup>ab</sup>
@@ -177,7 +210,16 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   </div>
   <p>Bilinearity is powerful because it lets you move scalar multiplication between arguments. This algebraic property is the foundation of signature aggregation: <code>e(sk·H, G₂) = e(H, sk·G₂)</code>.</p>
 
-  <h3>A3 — Why BLS12-381 Specifically?</h3>
+  <details class="gory-details">
+    <summary>The gory details: field towers, embedding degree, and the Ate pairing</summary>
+    <div class="gory-body">
+      <p>Under the hood, the three groups live in a tower of extension fields built on the 381-bit base prime <em>p</em>. <span class="g1">G₁</span> is a subgroup of the curve over the base field 𝔽<sub>p</sub>; <span class="g2">G₂</span> lives over the quadratic extension 𝔽<sub>p²</sub> (which is why its points are twice as big); and the target <span class="gt">G<sub>T</sub></span> is the group of <em>r</em>-th roots of unity inside the degree-12 extension 𝔽<sub>p¹²</sub> — hence a G<sub>T</sub> element serialises to 12 × 48 = <strong>576 bytes</strong>.</p>
+      <p>The number 12 is the <strong>embedding degree</strong> <em>k</em>: the smallest <em>k</em> such that the group order <em>r</em> divides <em>p<sup>k</sup> − 1</em>. It has to be small enough that arithmetic in 𝔽<sub>p¹²</sub> is tractable, yet large enough that the discrete log there stays as hard as an RSA key of comparable size — <em>k</em> = 12 is the sweet spot for the ~128-bit security target.</p>
+      <p>The pairing itself is computed as an <strong>optimal Ate pairing</strong>: a Miller loop that accumulates line functions along a scalar multiplication, followed by a <em>final exponentiation</em> to <em>(p¹² − 1)/r</em> that maps the result into the unique G<sub>T</sub> coset. The final exponentiation is what makes <code>e(P,Q)</code> a well-defined single value you can compare byte-for-byte — which is precisely what the demos below do.</p>
+    </div>
+  </details>
+
+  <h3>A4 — Why BLS12-381 Specifically?</h3>
   <p>Curve parameters:</p>
   <div class="table-wrap">
   <table>
@@ -205,6 +247,24 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <h3>B1 — The Three Algorithms</h3>
   <p><strong>Key generation:</strong> Private key sk ∈ ℤ<sub>r</sub> (random scalar). Public key <span class="g2">PK = sk · G₂</span> (G₂ point, 96 bytes).</p>
   <p><strong>Signing:</strong> Hash message to G₁: <span class="g1">H = hash_to_curve(message)</span>. Signature: <span class="g1">σ = sk · H</span> (G₁ point, 48 bytes).</p>
+
+  <aside class="explainer" aria-label="What is hash-to-curve">
+    <div class="explainer-head">What is <code>hash_to_curve</code>?</div>
+    <div class="explainer-body">
+      <p>An ordinary hash like SHA-256 turns a message into <em>random bytes</em>. But BLS needs the message as an actual <span class="g1">point that sits on the elliptic curve</span> — you can't just reinterpret hash bytes as coordinates, because most random (x, y) pairs don't land on the curve. <code>hash_to_curve</code> (standardised in RFC 9380) does the extra work: it hashes the message, maps the result onto a valid curve point, and clears the cofactor so the point lands in the prime-order subgroup <span class="g1">G₁</span>. The output <span class="g1">H</span> is deterministic (same message → same point) and, crucially, nobody knows its discrete log — so it behaves like a random oracle, which the security proof needs.</p>
+      <div class="htc-visual" aria-hidden="true">
+        <span class="htc-bytes">"slot 9841203"</span>
+        <span class="htc-arrow">→ hash_to_curve →</span>
+        <span class="htc-curve">
+          <svg viewBox="0 0 90 46" role="img" aria-label="a point sitting on an elliptic curve">
+            <path d="M6 40 C 20 40, 22 8, 40 8 S 70 40, 84 40" fill="none" stroke="currentColor" stroke-width="1.6"/>
+            <circle cx="52" cy="14.5" r="3.5" class="htc-dot"/>
+          </svg>
+          <span class="htc-label"><span class="g1">H</span> ∈ G₁</span>
+        </span>
+      </div>
+    </div>
+  </aside>
   <p><strong>Verification:</strong> Check the pairing equation:</p>
   <div class="math-block">
     e(<span class="g1">σ</span>, <span class="g2">G₂</span>) = e(<span class="g1">H</span>, <span class="g2">PK</span>)
@@ -368,6 +428,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     </tbody>
   </table>
   </div>
+  <p class="note">This demo uses the <strong>short-signature</strong> variant of BLS: signatures live in <span class="g1">G₁</span> (48 bytes) and public keys in <span class="g2">G₂</span> (96 bytes). BLS is symmetric — you can swap the two groups. The other variant (keys in G₁, signatures in G₂) gives 48-byte keys and 96-byte signatures, which is why you may have read "BLS signatures are 96 bytes" elsewhere. The swap is a deliberate tradeoff: putting signatures in the smaller, faster group makes <em>signing and signature storage</em> cheaper — the right choice for Ethereum, where every validator emits a signature every slot — at the cost of larger, slower public keys.</p>
   <p>The last two rows are identical — <strong>n signatures cost the same to verify as 1</strong>. That is the point.</p>
 </section>
 
@@ -440,6 +501,96 @@ for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart'] as cons
 }
 
 // ============================================================
+// Section A — Bilinearity Playground
+// e(aP, bQ) = e(P, Q)^ab = e(abP, Q) = e(P, abQ) — four different-looking
+// computations, all landing on the SAME G_T element, computed live.
+// ============================================================
+const pgA = () => $<HTMLInputElement>('#pg-a');
+const pgB = () => $<HTMLInputElement>('#pg-b');
+const pgOut = () => $<HTMLDivElement>('#pg-output');
+let pgShowFull = false;
+let pgLastHexes: { label: string; expr: string; hex: string }[] = [];
+let pgRenderToken = 0;
+
+// Render the four rows. When all four hexes match (they always will — this is a
+// real algebraic identity), show a byte-count match badge and offer the full
+// 576-byte reveal so the equality is airtight, not just a matching prefix.
+function pgRenderRows(): void {
+  const allEqual = pgLastHexes.every((r) => r.hex === pgLastHexes[0].hex);
+  const totalBytes = pgLastHexes[0] ? pgLastHexes[0].hex.length / 2 : 0;
+  const rows = pgLastHexes
+    .map(
+      (r) => `
+    <div class="pg-row">
+      <div class="pg-expr"><span class="pg-expr-name">${r.label}</span> ${r.expr}</div>
+      <div class="value gt pg-value${pgShowFull ? ' full' : ''}">${
+        pgShowFull ? r.hex : truncHex(r.hex)
+      }</div>
+    </div>`,
+    )
+    .join('');
+  const badge = allEqual
+    ? `<span class="badge valid">✅ IDENTICAL — all ${totalBytes}/${totalBytes} G_T bytes match</span>`
+    : '<span class="badge invalid">❌ mismatch</span>';
+  pgOut().innerHTML = `
+    <div class="verdict-head">${badge}
+      <button type="button" id="pg-toggle" class="reveal-btn" aria-expanded="${pgShowFull}">${
+        pgShowFull ? 'Hide full G_T value' : 'Show full 576-byte G_T value'
+      }</button>
+      ${copyBtn(pgLastHexes[0]?.hex ?? '', 'the shared G_T value')}
+    </div>
+    ${rows}
+  `;
+}
+
+async function pgCompute(): Promise<void> {
+  const token = ++pgRenderToken;
+  const a = BigInt(pgA().value);
+  const b = BigInt(pgB().value);
+  pgA().setAttribute('aria-valuetext', `a equals ${a}`);
+  pgB().setAttribute('aria-valuetext', `b equals ${b}`);
+  $<HTMLSpanElement>('#pg-a-display').textContent = String(a);
+  $<HTMLSpanElement>('#pg-b-display').textContent = String(b);
+  try {
+    await loadCrypto();
+    if (token !== pgRenderToken) return; // a newer drag superseded this one
+    const P = G1GEN;
+    const Q = G2GEN;
+    // Four genuinely different computations of the same G_T element.
+    pgLastHexes = [
+      { label: 'e(aP, bQ)', expr: `— scale both inputs (a=${a}, b=${b})`, hex: pairHex(P.multiply(a), Q.multiply(b)) },
+      { label: 'e(P, Q)^ab', expr: `— pair generators, then exponentiate by ab=${a * b}`, hex: pairPowHex(P, Q, a * b) },
+      { label: 'e(abP, Q)', expr: `— push both scalars into G₁ (abP)`, hex: pairHex(P.multiply(a * b), Q) },
+      { label: 'e(P, abQ)', expr: `— push both scalars into G₂ (abQ)`, hex: pairHex(P, Q.multiply(a * b)) },
+    ];
+    pgRenderRows();
+    announce(
+      'pg-status',
+      `With a=${a} and b=${b}, all four pairings produced the same G_T element.`,
+    );
+  } catch {
+    pgOut().innerHTML = '<p class="error-text">Pairing computation failed unexpectedly. Please try again.</p>';
+  }
+}
+
+pgA().addEventListener('input', () => void pgCompute());
+pgB().addEventListener('input', () => void pgCompute());
+pgOut().addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).id === 'pg-toggle') {
+    pgShowFull = !pgShowFull;
+    pgRenderRows();
+  }
+});
+// Initial compute on first interaction/idle so it never blocks first paint.
+pgOut().innerHTML = '<p class="empty-hint">Drag the sliders above to compute the four pairings.</p>';
+{
+  const kick = () => void pgCompute();
+  if ('requestIdleCallback' in window)
+    (window as unknown as { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(kick);
+  else setTimeout(kick, 200);
+}
+
+// ============================================================
 // Section B — BLS Sign / Verify
 // ============================================================
 interface BKeyState {
@@ -452,6 +603,8 @@ interface BKeyState {
 
 let bState: BKeyState | null = null;
 let bKeygenHtml = '';
+let bVerifyHexes: { left: string; right: string; equal: boolean } | null = null;
+let bShowFull = false;
 
 const bOutput = () => $<HTMLDivElement>('#b-output');
 const bVerdict = () => $<HTMLDivElement>('#b-verdict');
@@ -580,8 +733,9 @@ $('#b-verify').addEventListener('click', async () => {
     const rightHex = gtHex(bState.hashedMsg, bState.pk);
     const equal = leftHex === rightHex;
 
+    const totalBytes = leftHex.length / 2;
     const chip = equal
-      ? '<span class="badge valid">✅ MATCH — identical G_T element</span>'
+      ? `<span class="badge valid">✅ MATCH — all ${totalBytes}/${totalBytes} G_T bytes identical</span>`
       : '<span class="badge invalid">❌ NO MATCH — different G_T elements</span>';
 
     const lead = equal
@@ -590,6 +744,9 @@ $('#b-verify').addEventListener('click', async () => {
           bState.tampered ? 'The altered signature' : 'This signature'
         } maps to a different G_T element, so verification fails.</p>`;
 
+    // Stash full hexes so the reveal toggle can swap truncated ↔ full 576 bytes.
+    bVerifyHexes = { left: leftHex, right: rightHex, equal };
+    bShowFull = false;
     const leftShown = equal ? truncHex(leftHex) : markFirstDiff(leftHex, rightHex);
     const rightShown = equal ? truncHex(rightHex) : markFirstDiff(rightHex, leftHex);
 
@@ -597,15 +754,16 @@ $('#b-verify').addEventListener('click', async () => {
       <div class="verdict-head">
         ${valid ? '<span class="badge valid">✅ VALID</span>' : '<span class="badge invalid">❌ INVALID</span>'}
         ${chip}
+        ${equal ? `<button type="button" id="b-reveal" class="reveal-btn" aria-expanded="false">Show full ${totalBytes}-byte G_T values</button>` : ''}
       </div>
       ${lead}
       <div class="output-block">
         <div class="ob-head"><span class="label">e(σ, G₂) — left side</span>${copyBtn(leftHex, 'left pairing value')}</div>
-        <div class="value gt">${leftShown}</div>
+        <div class="value gt" id="b-left-val">${leftShown}</div>
       </div>
       <div class="output-block">
         <div class="ob-head"><span class="label">e(H, PK) — right side</span>${copyBtn(rightHex, 'right pairing value')}</div>
-        <div class="value gt">${rightShown}</div>
+        <div class="value gt" id="b-right-val">${rightShown}</div>
       </div>
       <div class="timing">
         <div class="timing-item"><span class="timing-label">Verify:</span><span class="timing-value">${verifyMs}ms</span></div>
@@ -620,6 +778,27 @@ $('#b-verify').addEventListener('click', async () => {
   } catch {
     bVerdict().innerHTML = '<p class="error-text">Verification failed unexpectedly. Please reset and try again.</p>';
   }
+});
+
+// Full-value reveal for the matching G_T pair: prove the equality across all
+// 576 bytes, not just a shared 32-byte prefix.
+bVerdict().addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).id !== 'b-reveal' || !bVerifyHexes) return;
+  bShowFull = !bShowFull;
+  const btn = $<HTMLButtonElement>('#b-reveal');
+  const leftEl = document.getElementById('b-left-val');
+  const rightEl = document.getElementById('b-right-val');
+  const bytes = bVerifyHexes.left.length / 2;
+  if (leftEl) {
+    leftEl.textContent = bShowFull ? bVerifyHexes.left : truncHex(bVerifyHexes.left);
+    leftEl.classList.toggle('gt-full', bShowFull);
+  }
+  if (rightEl) {
+    rightEl.textContent = bShowFull ? bVerifyHexes.right : truncHex(bVerifyHexes.right);
+    rightEl.classList.toggle('gt-full', bShowFull);
+  }
+  btn.textContent = bShowFull ? `Hide full ${bytes}-byte G_T values` : `Show full ${bytes}-byte G_T values`;
+  btn.setAttribute('aria-expanded', String(bShowFull));
 });
 
 $('#b-tamper').addEventListener('click', async () => {
@@ -853,13 +1032,20 @@ $('#c-aggregate').addEventListener('click', async () => {
   cGrid().setAttribute('aria-busy', 'true');
 
   try {
-    // Animate the merge (skipped under reduced-motion). The wait tracks the
-    // number of cards actually in the DOM, not the full signer count.
+    // Mechanism-revealing merge animation (skipped under reduced-motion): each
+    // σ card flies into a σ_agg pile and each PK card into a PK_agg pile — a
+    // literal depiction of the point-addition sums σ_agg = Σσᵢ and PK_agg = ΣPKᵢ.
+    // (The real aggregation math runs afterward on the FULL signer set, not just
+    // the on-screen cards, so the visual illustrates but never fakes the result.)
     if (!reduceMotion()) {
-      const cards = cGrid().querySelectorAll('.signer-card');
-      cards.forEach((card, i) => setTimeout(() => card.classList.add('merging'), i * 30));
+      const cards = Array.from(cGrid().querySelectorAll<HTMLElement>('.signer-card'));
       const total = cards.length;
-      await new Promise((r) => setTimeout(r, Math.min(total * 30 + 400, isNarrow() ? 1200 : 2200)));
+      cards.forEach((card, i) => {
+        // Alternate which pile each card flies toward so both sums are visible.
+        card.classList.add(i % 2 === 0 ? 'fly-left' : 'fly-right');
+        setTimeout(() => card.classList.add('flying'), 120 + i * 24);
+      });
+      await new Promise((r) => setTimeout(r, Math.min(total * 24 + 520, isNarrow() ? 1300 : 2200)));
     }
 
     const t0 = performance.now();
@@ -893,9 +1079,42 @@ $('#c-aggregate').addEventListener('click', async () => {
     const aggSigHex = aggSig.toHex();
     const aggPkHex = aggPk.toHex();
 
+    const gtNode = aggEqual
+      ? `<div class="agg-gt-node match" role="img" aria-label="Both pairings meet at one identical G_T element">
+           <div class="agg-gt-title">One G<sub>T</sub> element</div>
+           <div class="value gt agg-gt-hex">${truncHex(aggLeftHex, 12)}</div>
+           <span class="badge valid">✅ both arrows land here</span>
+         </div>`
+      : `<div class="agg-gt-node nomatch" role="img" aria-label="The two pairings land on different G_T elements">
+           <div class="agg-gt-title">Two different G<sub>T</sub> elements</div>
+           <span class="badge invalid">❌ no match</span>
+         </div>`;
+
     cGrid().innerHTML = `
       <div class="signer-card aggregate">
         <div class="signer-index">Aggregated (${n} signers)</div>
+
+        <!-- Mechanism diagram: two point-addition sums, then two surviving pairings meeting at one G_T node. -->
+        <div class="agg-diagram" role="group" aria-label="How ${n} signatures collapse to 2 pairings">
+          <div class="agg-sums">
+            <div class="agg-sum g1-tint">
+              <div class="agg-sum-op">σ₁ + σ₂ + … + σ<sub>${n}</sub></div>
+              <div class="agg-sum-label">point addition in <span class="g1">G₁</span></div>
+              <div class="agg-sum-eq">= <span class="g1">σ<sub>agg</sub></span></div>
+            </div>
+            <div class="agg-sum g2-tint">
+              <div class="agg-sum-op">PK₁ + PK₂ + … + PK<sub>${n}</sub></div>
+              <div class="agg-sum-label">point addition in <span class="g2">G₂</span></div>
+              <div class="agg-sum-eq">= <span class="g2">PK<sub>agg</sub></span></div>
+            </div>
+          </div>
+          <div class="agg-pairings">
+            <div class="agg-arrow g1-arrow">e(<span class="g1">σ<sub>agg</sub></span>, <span class="g2">G₂</span>) <span class="agg-arrow-line" aria-hidden="true">↘</span></div>
+            <div class="agg-arrow g2-arrow">e(<span class="g1">H</span>, <span class="g2">PK<sub>agg</sub></span>) <span class="agg-arrow-line" aria-hidden="true">↗</span></div>
+          </div>
+          ${gtNode}
+        </div>
+
         <div class="output-block" style="margin:0.5rem 0">
           <div class="ob-head"><span class="label">Aggregate Signature (48 bytes G₁)</span>${copyBtn(aggSigHex, 'aggregate signature')}</div>
           <div class="value g1">${truncHex(aggSigHex)}</div>
@@ -916,7 +1135,7 @@ $('#c-aggregate').addEventListener('click', async () => {
           ${aggValid ? '<span class="badge valid">✅ AGGREGATE VALID</span>' : '<span class="badge invalid">❌ AGGREGATE INVALID</span>'}
           ${aggEqual ? '<span class="badge valid">✅ MATCH — identical G_T element</span>' : '<span class="badge invalid">❌ NO MATCH</span>'}
         </div>
-        <p class="verdict-lead">Every signer's pairing contribution adds in the exponent, so all n pairings collapse into this single equality — that is why ${n} signatures verify with just 2 pairings.</p>
+        <p class="verdict-lead">Adding the ${n} signatures into one point (<span class="g1">σ<sub>agg</sub></span>) and the ${n} keys into one point (<span class="g2">PK<sub>agg</sub></span>) leaves just <strong>two</strong> pairings to compute — and bilinearity makes every signer's contribution add in the exponent, so those two arrows meet at one <span class="gt">G<sub>T</sub></span> element. That is why ${n} signatures verify with 2 pairings instead of ${2 * n}.</p>
       </div>
     `;
 

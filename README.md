@@ -17,7 +17,14 @@ crypto-lab-pairing-gate implements BLS signatures and signature aggregation over
 
 **[systemslibrarian.github.io/crypto-lab-pairing-gate](https://systemslibrarian.github.io/crypto-lab-pairing-gate/)**
 
-Generate BLS keypairs, sign messages, and verify signatures using real BLS12-381 arithmetic via `@noble/curves`. The sign/verify section lets you generate a keypair, sign an arbitrary message, verify the pairing equation, and tamper with the signature to observe verification failure. The aggregation visualizer has a signer-count slider (2–100), generates all keypairs and signatures, then animates them collapsing into a single 48-byte aggregate signature verified with two pairings.
+Generate BLS keypairs, sign messages, and verify signatures using real BLS12-381 arithmetic via `@noble/curves`. The exhibits, in order:
+
+1. **Bilinearity playground** — two scalar sliders `a` and `b`. Watch four different-looking computations `e(aP, bQ)`, `e(P, Q)^ab`, `e(abP, Q)`, and `e(P, abQ)` all land on the *same* G_T element, computed live, with a full 576-byte reveal so the equality is airtight rather than a matching prefix. This is the load-bearing property the rest of the demo rests on, made draggable.
+2. **What is a pairing** — the three groups (G₁/G₂/G_T), the three defining properties, and a "gory details" expandable covering the field tower, embedding degree, and Ate pairing for readers who want the machinery.
+3. **Sign / verify** — generate a keypair, sign an arbitrary message, and verify the pairing equation `e(σ, G₂) = e(H, PK)` by showing both sides as full byte strings that literally match (with a full 576-byte reveal and a byte-count match indicator). A plain-language *hash-to-curve* aside explains how a message becomes a point on the curve. Tamper with the signature to watch the check fail, first differing nibble highlighted.
+4. **Aggregation** — a signer-count slider (2–100) generates all keypairs and signatures, then a mechanism diagram shows the signatures and keys stacking into the point-addition sums σ_agg and PK_agg, from which two surviving pairing arrows converge on one G_T node — visualizing *why* 2n pairings collapse to 2.
+5. **Rogue-key attack & defenses** — a live naive-aggregation forgery, then Proof of Possession rejecting the rogue key, plus message augmentation and hash-to-scalar defenses.
+6. **Where pairings appear** — production deployments (Ethereum, Zcash, DFINITY, Filecoin) and a size comparison table, with a note explaining the short-signature variant tradeoff (48-byte signatures in G₁, 96-byte keys in G₂).
 
 ## What Can Go Wrong
 
