@@ -221,7 +221,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 
   <h3>A4 — Why BLS12-381 Specifically?</h3>
   <p>Curve parameters:</p>
-  <div class="table-wrap">
+  <div class="table-wrap" tabindex="0" role="region" aria-label="BLS12-381 curve parameters (scrollable table)">
   <table>
     <caption>BLS12-381 Curve Parameters</caption>
     <thead>
@@ -303,7 +303,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div class="math-block">
     <strong>Verify aggregate:</strong> e(<span class="g1">σ<sub>agg</sub></span>, <span class="g2">G₂</span>) = e(<span class="g1">H(msg)</span>, <span class="g2">PK<sub>agg</sub></span>)
   </div>
-  <div class="table-wrap">
+  <div class="table-wrap" tabindex="0" role="region" aria-label="Aggregation cost comparison (scrollable table)">
   <table>
     <caption>Aggregation Cost Comparison (same message)</caption>
     <thead>
@@ -414,7 +414,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   </div>
 
   <h3>Size Comparison</h3>
-  <div class="table-wrap">
+  <div class="table-wrap" tabindex="0" role="region" aria-label="Signature scheme size comparison (scrollable table)">
   <table>
     <caption>Signature Scheme Size Comparison</caption>
     <thead>
