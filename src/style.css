@@ -87,7 +87,11 @@ body {
   top: -100%;
   left: 0;
   background: var(--accent);
-  color: var(--background);
+  /* --on-accent, not --background: in the light theme --background (#f8fafc) on
+     the light --accent (#d97706) is only 3.04:1, failing WCAG 1.4.3. --on-accent
+     is the token already tuned for text on an accent fill — 8.26:1 dark,
+     5.79:1 light. */
+  color: var(--on-accent);
   padding: 0.5rem 1rem;
   z-index: 100;
   font-size: 0.9rem;
