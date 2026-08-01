@@ -17,6 +17,13 @@
   --accent-fill-hover: #fbbf24; /* brighter amber for fill hover (dark text stays AA) */
   --on-accent: #111827;     /* text/icon colour on an accent fill */
   --border: #1e293b;
+  /* Control boundaries only (WCAG 2.1 SC 1.4.11). Text inputs are filled with
+     --code-bg (#151c2c), which is 1.13:1 against --surface and 1.19:1 against
+     --surface-alt, so the border is the only thing delineating the field.
+     #6b7686 is ≥3.5:1 on every surface a field sits on: 4.18:1 on --background,
+     3.85:1 on --surface, 3.50:1 on --surface-alt. --border is left unchanged for
+     decorative rules — card outlines, dividers, table rules. */
+  --border-strong: #6b7686;
   --code-bg: #151c2c;
   --g1-color: #38bdf8;
   --g2-color: #a78bfa;
@@ -42,6 +49,12 @@
   --accent-fill-hover: #f59e0b; /* brighter amber for fill hover (dark text ≈ 8.6:1) */
   --on-accent: #1c1206;     /* dark text on amber fill (#1c1206 on #d97706 ≈ 5.6:1) */
   --border: #e2e8f0;
+  /* See --border-strong in the dark block. Light fields are filled with
+     --code-bg (#f1f5f9) — literally the same hex as --surface-alt (1.00:1) and
+     1.05:1 against --surface — so the border carries the whole boundary.
+     #7f8b9c is 3.46:1 on --surface, 3.30:1 on --background, 3.16:1 on
+     --surface-alt (was #e2e8f0 at 1.23:1). */
+  --border-strong: #7f8b9c;
   --code-bg: #f1f5f9;
   --g1-color: #0369a1;
   --g2-color: #6d28d9;
@@ -398,7 +411,7 @@ input[type="range"] {
 
 input[type="text"] {
   background: var(--code-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   /* 16px keeps iOS Safari from auto-zooming when the field gains focus */
