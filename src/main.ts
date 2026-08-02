@@ -54,13 +54,40 @@ const hexToBytes = (hex: string): Uint8Array => {
 const truncHex = (hex: string, bytes = 32): string =>
   hex.length > bytes * 2 ? hex.slice(0, bytes * 2) + '…' : hex;
 
-// Truncated hex with the first nibble that differs from `other` highlighted.
+// Hex with the first nibble that differs from `other` highlighted.
+//
+// The difference is often NOT in the opening bytes. Negating a signature
+// (sigma -> -sigma) makes the pairing the Fp12 conjugate, so the two 576-byte
+// G_T values agree for their first 288 bytes. Scanning only the leading window
+// found nothing to mark and printed two identical-looking strings under a
+// verdict announcing they were different. So: find the first difference across
+// the WHOLE value, then show a window around it, saying how much was elided
+// rather than presenting the window as the start.
 const markFirstDiff = (hex: string, other: string, bytes = 32): string => {
-  const shown = hex.slice(0, bytes * 2);
+  const width = bytes * 2;
+  const limit = Math.min(hex.length, other.length);
   let i = 0;
-  while (i < shown.length && shown[i] === other[i]) i++;
-  if (i >= shown.length) return shown + '…';
-  return `${shown.slice(0, i)}<mark class="diff-mark">${shown[i]}</mark>${shown.slice(i + 1)}…`;
+  while (i < limit && hex[i] === other[i]) i++;
+
+  // Identical over the compared length — nothing to highlight.
+  if (i >= limit) return truncHex(hex, bytes);
+
+  if (i < width) {
+    const shown = hex.slice(0, width);
+    const tail = hex.length > width ? '…' : '';
+    return `${shown.slice(0, i)}<mark class="diff-mark">${shown[i]}</mark>${shown.slice(i + 1)}${tail}`;
+  }
+
+  // Centre the window on the first differing nibble, aligned to a byte
+  // boundary so the preview still reads as whole bytes.
+  const start = Math.max(0, (i - Math.floor(width / 2)) & ~1);
+  const end = Math.min(hex.length, start + width);
+  const window = hex.slice(start, end);
+  const at = i - start;
+  const head =
+    start > 0 ? `<span class="diff-elision">…first ${start / 2} bytes identical…</span>` : '';
+  const tail = end < hex.length ? '…' : '';
+  return `${head}${window.slice(0, at)}<mark class="diff-mark">${window[at]}</mark>${window.slice(at + 1)}${tail}`;
 };
 
 // Copy-to-clipboard button (hex is [0-9a-f] only, so safe to inline as an attribute)
@@ -701,9 +728,9 @@ $('#b-sign').addEventListener('click', async () => {
     bOutput().innerHTML =
       bKeygenHtml.replace(/<p class="empty-hint">Step 2[^<]*<\/p>/, '') +
       `
-      <div class="output-block">
-        <div class="ob-head"><span class="label">Signature (48 bytes compressed G₁)</span>${copyBtn(sigHex, 'signature')}</div>
-        <div class="value g1">${sigHex}</div>
+      <div class="output-block" id="b-sig-block">
+        <div class="ob-head"><span class="label" id="b-sig-label">Signature (48 bytes compressed G₁)</span>${copyBtn(sigHex, 'signature')}</div>
+        <div class="value g1" id="b-sig-val">${sigHex}</div>
       </div>
       <div class="output-block">
         <div class="ob-head"><span class="label">Hash-to-curve H(msg) (48 bytes G₁)</span>${copyBtn(hHex, 'hash')}</div>
@@ -806,6 +833,7 @@ $('#b-tamper').addEventListener('click', async () => {
   try {
     await loadCrypto();
     const sigBytes = bls.Signature.toBytes(bState.sig);
+    const sigHexBeforeTamper = bState.sig.toHex();
     let note = '';
     let done = false;
 
@@ -831,6 +859,20 @@ $('#b-tamper').addEventListener('click', async () => {
 
     bState.tampered = true;
     setDisabled('#b-verify', false);
+
+    // Show the signature that will actually be verified. Leaving the original
+    // on screen meant the learner compared pairings against a value the page
+    // was no longer using, and the altered bytes were never visible anywhere.
+    const tamperedHex = bState.sig.toHex();
+    const sigVal = document.getElementById('b-sig-val');
+    const sigLabel = document.getElementById('b-sig-label');
+    if (sigVal) {
+      sigVal.innerHTML = markFirstDiff(tamperedHex, sigHexBeforeTamper, 48);
+    }
+    if (sigLabel) {
+      sigLabel.textContent = 'Signature — ALTERED (48 bytes compressed G₁)';
+    }
+
     bVerdict().innerHTML = `<div class="note" style="border-left-color:var(--error)">${note}</div>`;
     announce('b-status', 'Signature altered. Verify to see it fail.');
   } catch {

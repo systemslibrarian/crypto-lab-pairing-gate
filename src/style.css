@@ -603,6 +603,15 @@ input[type="range"]:focus-visible {
   font-weight: 700;
 }
 
+/* Says how much identical hex was skipped to reach the first difference.
+   Negating a signature leaves the first 288 of 576 G_T bytes untouched, so
+   the window has to start well inside the value. */
+.diff-elision {
+  color: var(--text-muted);
+  font-style: italic;
+  margin-right: 0.35em;
+}
+
 .key-card-note {
   color: var(--text-muted);
   font-size: 0.8rem;
