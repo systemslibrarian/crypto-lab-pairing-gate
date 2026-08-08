@@ -215,7 +215,12 @@ header .portfolio-link {
 .cl-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:clamp(1rem,4vw,3rem);flex-wrap:wrap;margin:clamp(1rem,3vw,2rem) 0 1.5rem;}
 .cl-hero-main{flex:1 1 22rem;min-width:min(100%,20rem);}
 .cl-hero-title{margin:0;font-size:clamp(1.6rem,3.8vw,2.7rem);font-weight:700;line-height:1.1;letter-spacing:.01em;}
-.cl-hero-sub{margin:.4rem 0 0;font-size:clamp(.9rem,1.6vw,1.05rem);letter-spacing:.01em;opacity:.85;}
+/* No `opacity` here. This rule sets no colour of its own, so it inherits
+   --text-muted from the blanket `p {}` rule above — and fading an already
+   muted token dropped the painted result to rgb(109,119,133) on --background
+   in the light theme: 4.33:1, under the 4.5:1 floor. The dimming was applied
+   twice and neither half knew about the other. */
+.cl-hero-sub{margin:.4rem 0 0;font-size:clamp(.9rem,1.6vw,1.05rem);letter-spacing:.01em;}
 .cl-hero-desc{margin:.55rem 0 0;font-size:1rem;line-height:1.5;color:var(--text-muted);max-width:60ch;}
 .cl-hero-why{flex:0 1 min(40%,26rem);min-width:min(100%,15rem);border:1px solid var(--border);border-radius:10px;padding:.85rem 1.05rem;background:color-mix(in oklab,var(--accent) 6%,transparent);}
 .cl-hero-why-label{display:block;font-size:.68rem;font-weight:700;letter-spacing:.14em;color:var(--accent-text);}
@@ -594,10 +599,17 @@ input[type="range"]:focus-visible {
   color: var(--text);
 }
 
-/* First differing nibble between two non-matching G_T values */
+/* First differing nibble between two non-matching G_T values.
+   The ink is --background, not #fff. --error is a BRIGHT hue in the dark theme
+   (#f87171, chosen for borders and swatches), so white on it measured 2.77:1 —
+   and this one highlighted nibble is the whole point of the tampered verdict:
+   the single character proving the two G_T values differ was the least
+   readable thing in the section. --background is already what
+   `button.danger:hover` uses as ink on a solid --error fill, and it flips with
+   the theme: 6.96:1 dark, 4.62:1 light. */
 .diff-mark {
   background: var(--error);
-  color: #fff;
+  color: var(--background);
   border-radius: 2px;
   padding: 0 1px;
   font-weight: 700;
