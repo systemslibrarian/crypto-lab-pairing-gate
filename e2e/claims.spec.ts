@@ -14,7 +14,7 @@ import { expect, test } from '@playwright/test';
 
 async function signThenTamper(page: import('@playwright/test').Page): Promise<void> {
   await page.goto('.');
-  await expect(page.locator('#cl-theme-toggle')).toBeVisible();
+  await expect(page.locator('.cl-topbar')).toBeVisible();
 
   await page.locator('#b-keygen').click();
   await expect(page.locator('#b-sign')).toBeEnabled();
@@ -25,7 +25,7 @@ async function signThenTamper(page: import('@playwright/test').Page): Promise<vo
 
 test('tampering shows the altered signature, not the original', async ({ page }) => {
   await page.goto('.');
-  await expect(page.locator('#cl-theme-toggle')).toBeVisible();
+  await expect(page.locator('.cl-topbar')).toBeVisible();
   await page.locator('#b-keygen').click();
   await expect(page.locator('#b-sign')).toBeEnabled();
   await page.locator('#b-sign').click();
@@ -73,7 +73,7 @@ test('a failed verification actually highlights where the G_T values differ', as
 
 test('an untampered signature still verifies and claims no difference', async ({ page }) => {
   await page.goto('.');
-  await expect(page.locator('#cl-theme-toggle')).toBeVisible();
+  await expect(page.locator('.cl-topbar')).toBeVisible();
   await page.locator('#b-keygen').click();
   await expect(page.locator('#b-sign')).toBeEnabled();
   await page.locator('#b-sign').click();

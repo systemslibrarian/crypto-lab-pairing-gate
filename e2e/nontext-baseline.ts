@@ -27,7 +27,6 @@ export const NONTEXT_BASELINE: Record<
   "control-boundary|button#c-keygen.primary": { ratio: 2.15, required: 3.0, unverified: false },
   "control-boundary|button#c-reset.ghost": { ratio: 1.21, required: 3.0, unverified: false },
   "control-boundary|button#c-sign": { ratio: 1.21, required: 3.0, unverified: false },
-  "control-boundary|button#cl-theme-toggle.cl-btn.cl-icon": { ratio: 1.81, required: 3.0, unverified: false },
   "control-boundary|button#d-defend": { ratio: 1.21, required: 3.0, unverified: false },
   "control-boundary|button#d-reset.ghost": { ratio: 1.21, required: 3.0, unverified: false },
   "control-boundary|button#pg-toggle.reveal-btn": { ratio: 1.21, required: 3.0, unverified: false },
