@@ -18,13 +18,11 @@ export const NONTEXT_BASELINE: Record<
   { ratio: number; required: number; unverified: boolean }
 > = {
   "control-boundary|a.cl-btn": { ratio: 1.81, required: 3.0, unverified: false },
-  "control-boundary|button#b-keygen.primary": { ratio: 2.15, required: 3.0, unverified: false },
   "control-boundary|button#b-reset.ghost": { ratio: 1.21, required: 3.0, unverified: false },
   "control-boundary|button#b-reveal.reveal-btn": { ratio: 1.21, required: 3.0, unverified: false },
   "control-boundary|button#b-sign": { ratio: 1.21, required: 3.0, unverified: false },
   "control-boundary|button#b-verify": { ratio: 1.21, required: 3.0, unverified: false },
   "control-boundary|button#c-aggregate": { ratio: 1.21, required: 3.0, unverified: false },
-  "control-boundary|button#c-keygen.primary": { ratio: 2.15, required: 3.0, unverified: false },
   "control-boundary|button#c-reset.ghost": { ratio: 1.21, required: 3.0, unverified: false },
   "control-boundary|button#c-sign": { ratio: 1.21, required: 3.0, unverified: false },
   "control-boundary|button#d-defend": { ratio: 1.21, required: 3.0, unverified: false },
