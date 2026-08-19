@@ -146,27 +146,9 @@ const reduceMotion = (): boolean =>
 const isNarrow = (): boolean => window.innerWidth < 640;
 
 // ============================================================
-// Theme toggle
-// ============================================================
-function currentTheme(): string {
-  return document.documentElement.getAttribute('data-theme') ?? 'dark';
-}
-
-function setTheme(t: string) {
-  document.documentElement.setAttribute('data-theme', t);
-  localStorage.setItem('theme', t);
-  const btn = document.getElementById('theme-toggle');
-  if (btn) {
-    btn.textContent = t === 'dark' ? '🌙' : '☀️';
-    btn.setAttribute('aria-label', `Switch to ${t === 'dark' ? 'light' : 'dark'} mode`);
-  }
-}
-
-// ============================================================
 // Render HTML
 // ============================================================
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-<button id="theme-toggle" class="theme-toggle" aria-label="Switch to light mode">🌙</button>
 <header class="cl-hero">
   <div class="cl-hero-main">
     <h1 class="cl-hero-title">Pairing Gate</h1>
@@ -473,14 +455,6 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 
 <p id="copy-status" role="status" class="sr-only"></p>
 `;
-
-// ============================================================
-// Init theme toggle
-// ============================================================
-setTheme(currentTheme());
-document.getElementById('theme-toggle')!.addEventListener('click', () => {
-  setTheme(currentTheme() === 'dark' ? 'light' : 'dark');
-});
 
 // ============================================================
 // Copy-to-clipboard (event delegation for dynamically rendered buttons)
