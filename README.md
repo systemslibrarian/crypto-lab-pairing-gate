@@ -51,6 +51,12 @@ npm install
 npm run dev
 ```
 
+`npm test` checks the BLS12-381 G1 hash-to-curve coordinates against
+[RFC 9380 Appendix J.9.1](https://www.rfc-editor.org/rfc/rfc9380.html#appendix-J.9.1)
+using that vector's stated suite and DST. It also checks the pairing identity
+and rejects a changed signature scalar. CI requires this unit step before build
+and the browser accessibility gate.
+
 ## Related Demos
 
 - [crypto-lab-ibe-gate](https://systemslibrarian.github.io/crypto-lab-ibe-gate/) — Boneh-Franklin identity-based encryption over the same BLS12-381 pairing.

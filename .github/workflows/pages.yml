@@ -26,7 +26,8 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npx tsc --noEmit
-      - run: npm test --if-present
+      - name: RFC 9380 point and pairing identity unit gate
+        run: npm test
       - run: npm run build
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
