@@ -1,0 +1,102 @@
+[
+  {
+    "name": "signer count upper bound is bypassed",
+    "sourceDiff": "diff --git a/src/protocol.ts b/src/protocol.ts\nindex 530c1b3..0423a1e 100644\n--- a/src/protocol.ts\n+++ b/src/protocol.ts\n@@ -22,7 +22,7 @@ export function parseSignerCount(value: string): number {\n     throw new Error(`Signer count must be a whole number from ${MIN_SIGNERS} to ${MAX_SIGNERS}.`);\n   }\n   const count = Number(value);\n-  if (!Number.isSafeInteger(count) || count < MIN_SIGNERS || count > MAX_SIGNERS) {\n+  if (!Number.isSafeInteger(count) || count < MIN_SIGNERS || false) {\n     throw new Error(`Signer count must be a whole number from ${MIN_SIGNERS} to ${MAX_SIGNERS}.`);\n   }\n   return count;\n",
+    "baseline": "073dd0a1f2c5fce2b0a689690c870713bb3864c383269ccaccc499278bf029e1",
+    "mutant": "bdd291601d9b3edb8c67f562cc70afc0069601652ae1c262970ba0dfac827e37",
+    "namedTest": "accepts only the advertised signer-count range",
+    "assertionFailure": true,
+    "retries": 0,
+    "restoredGreen": true
+  },
+  {
+    "name": "encoded message byte bound is bypassed",
+    "sourceDiff": "diff --git a/src/protocol.ts b/src/protocol.ts\nindex 530c1b3..0c7688b 100644\n--- a/src/protocol.ts\n+++ b/src/protocol.ts\n@@ -30,7 +30,7 @@ export function parseSignerCount(value: string): number {\n \n export function encodeBoundedMessage(value: string): Uint8Array {\n   const encoded = new TextEncoder().encode(value);\n-  if (encoded.length > MAX_MESSAGE_BYTES) {\n+  if (false && encoded.length > MAX_MESSAGE_BYTES) {\n     throw new Error(`Message must be at most ${MAX_MESSAGE_BYTES} UTF-8 bytes.`);\n   }\n   return encoded;\n",
+    "baseline": "073dd0a1f2c5fce2b0a689690c870713bb3864c383269ccaccc499278bf029e1",
+    "mutant": "f46d0f2042ee71232753d6d2711990c1825e338bfb4e8ba89d163764e54fe64d",
+    "namedTest": "bounds messages by encoded bytes rather than JavaScript characters",
+    "assertionFailure": true,
+    "retries": 0,
+    "restoredGreen": true
+  },
+  {
+    "name": "retired operation epoch regains authority",
+    "sourceDiff": "diff --git a/src/protocol.ts b/src/protocol.ts\nindex 530c1b3..832ec03 100644\n--- a/src/protocol.ts\n+++ b/src/protocol.ts\n@@ -49,7 +49,7 @@ export class OperationEpoch {\n   }\n \n   isCurrent(expected: number): boolean {\n-    return expected === this.#value;\n+    return true || expected === this.#value;\n   }\n }\n \n",
+    "baseline": "073dd0a1f2c5fce2b0a689690c870713bb3864c383269ccaccc499278bf029e1",
+    "mutant": "2bf844ee698dd4d69354ff43c35e885291b74309361650a09cae8ad28d3b6104",
+    "namedTest": "only the newest operation epoch retains authority",
+    "assertionFailure": true,
+    "retries": 0,
+    "restoredGreen": true
+  },
+  {
+    "name": "ordinary signatures use the default NUL domain",
+    "sourceDiff": "diff --git a/src/protocol.ts b/src/protocol.ts\nindex 530c1b3..7af335c 100644\n--- a/src/protocol.ts\n+++ b/src/protocol.ts\n@@ -1,4 +1,4 @@\n-export const BLS_SIGNATURE_DST = 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_POP_';\n+export const BLS_SIGNATURE_DST = 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_';\n export const BLS_POP_PROOF_DST = 'BLS_POP_BLS12381G1_XMD:SHA-256_SSWU_RO_POP_';\n \n export const MIN_SIGNERS = 2;\n",
+    "baseline": "073dd0a1f2c5fce2b0a689690c870713bb3864c383269ccaccc499278bf029e1",
+    "mutant": "0ce6725acde3b929fdc13b001a40ee2cb5ec9d5bf446f7237e02e72dfca56264",
+    "namedTest": "uses distinct July 2026 CFRG draft domains",
+    "assertionFailure": true,
+    "retries": 0,
+    "restoredGreen": true
+  },
+  {
+    "name": "proofs reuse the ordinary signature domain",
+    "sourceDiff": "diff --git a/src/protocol.ts b/src/protocol.ts\nindex 530c1b3..4c18d4a 100644\n--- a/src/protocol.ts\n+++ b/src/protocol.ts\n@@ -1,5 +1,5 @@\n export const BLS_SIGNATURE_DST = 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_POP_';\n-export const BLS_POP_PROOF_DST = 'BLS_POP_BLS12381G1_XMD:SHA-256_SSWU_RO_POP_';\n+export const BLS_POP_PROOF_DST = 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_POP_';\n \n export const MIN_SIGNERS = 2;\n export const MAX_SIGNERS = 100;\n",
+    "baseline": "073dd0a1f2c5fce2b0a689690c870713bb3864c383269ccaccc499278bf029e1",
+    "mutant": "06c334aeae781ceaf716157fb904b02ed9cdff425325a13d97d84d46a8a0e6e0",
+    "namedTest": "uses distinct July 2026 CFRG draft domains",
+    "assertionFailure": true,
+    "retries": 0,
+    "restoredGreen": true
+  },
+  {
+    "name": "message edit no longer retires an aggregate animation",
+    "sourceDiff": "diff --git a/src/main.ts b/src/main.ts\nindex d493626..9714342 100644\n--- a/src/main.ts\n+++ b/src/main.ts\n@@ -1145,7 +1145,7 @@ $('#c-aggregate').addEventListener('click', async () => {\n         setTimeout(() => card.classList.add('flying'), 120 + i * 24);\n       });\n       await new Promise((r) => setTimeout(r, Math.min(total * 24 + 520, isNarrow() ? 1300 : 2200)));\n-      if (!cEpoch.isCurrent(token)) throw new RetiredOperationError();\n+      if (false && !cEpoch.isCurrent(token)) throw new RetiredOperationError();\n     }\n \n     const t0 = performance.now();\n",
+    "baseline": "073dd0a1f2c5fce2b0a689690c870713bb3864c383269ccaccc499278bf029e1",
+    "mutant": "ad6fc96aded2f63bd329e6075a65b18490bcb0b808e70621fd0c02f353623fb0",
+    "namedTest": "editing the message retires an in-flight aggregate result",
+    "assertionFailure": true,
+    "retries": 0,
+    "restoredGreen": true
+  },
+  {
+    "name": "Ethereum is said to use the demo orientation",
+    "sourceDiff": "diff --git a/src/main.ts b/src/main.ts\nindex d493626..7e0bf6e 100644\n--- a/src/main.ts\n+++ b/src/main.ts\n@@ -458,7 +458,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `\n     </tbody>\n   </table>\n   </div>\n-  <p class=\"note\">This demo uses the draft's <strong>minimal-signature-size</strong> orientation: signatures live in <span class=\"g1\">G₁</span> (48 bytes) and public keys in <span class=\"g2\">G₂</span> (96 bytes). BLS12-381 is a type-3 pairing, so G₁ and G₂ are not interchangeable; a separately specified ciphersuite can reverse the roles. Ethereum uses that opposite, minimal-public-key-size orientation: 48-byte G₁ keys and 96-byte G₂ signatures.</p>\n+  <p class=\"note\">This demo uses the draft's <strong>minimal-signature-size</strong> orientation: signatures live in <span class=\"g1\">G₁</span> (48 bytes) and public keys in <span class=\"g2\">G₂</span> (96 bytes). BLS12-381 is a type-3 pairing, so G₁ and G₂ are not interchangeable; a separately specified ciphersuite can reverse the roles. Ethereum uses this same orientation: 96-byte G₂ keys and 48-byte G₁ signatures.</p>\n   <p>The aggregate signature stays one group element, and its final same-message equation has two pairing terms. Constructing and validating the aggregate is still not free: adding n contributions and establishing the signer set remain O(n).</p>\n </section>\n \n",
+    "baseline": "073dd0a1f2c5fce2b0a689690c870713bb3864c383269ccaccc499278bf029e1",
+    "mutant": "f98d883401296498ef551b7b713e50d266e33381c1451818e09e8451f0383b7e",
+    "namedTest": "distinguishes this demo orientation from Ethereum consensus",
+    "assertionFailure": true,
+    "retries": 0,
+    "restoredGreen": true
+  },
+  {
+    "name": "aggregate construction is mislabeled constant work",
+    "sourceDiff": "diff --git a/src/main.ts b/src/main.ts\nindex d493626..ec47f76 100644\n--- a/src/main.ts\n+++ b/src/main.ts\n@@ -1221,7 +1221,7 @@ $('#c-aggregate').addEventListener('click', async () => {\n           ${aggValid ? '<span class=\"badge valid\">✅ AGGREGATE VALID</span>' : '<span class=\"badge invalid\">❌ AGGREGATE INVALID</span>'}\n           ${aggEqual ? '<span class=\"badge valid\">✅ MATCH — identical G_T element</span>' : '<span class=\"badge invalid\">❌ NO MATCH</span>'}\n         </div>\n-        <p class=\"verdict-lead\">Building the two aggregate points takes <strong>O(n) point additions</strong>. After that linear work, the final same-message equation has <strong>two pairing terms</strong>, and bilinearity makes both arrows meet at one <span class=\"gt\">G<sub>T</sub></span> element.</p>\n+        <p class=\"verdict-lead\">Building the two aggregate points takes <strong>O(1) total work</strong>. After that linear work, the final same-message equation has <strong>two pairing terms</strong>, and bilinearity makes both arrows meet at one <span class=\"gt\">G<sub>T</sub></span> element.</p>\n       </div>\n     `;\n \n",
+    "baseline": "073dd0a1f2c5fce2b0a689690c870713bb3864c383269ccaccc499278bf029e1",
+    "mutant": "1c392de017229296b8e87024c8538e7dd71c4b9e06bd6fa2a9360a01bbceffca",
+    "namedTest": "aggregation reports linear construction and a two-term final equation",
+    "assertionFailure": true,
+    "retries": 0,
+    "restoredGreen": true
+  },
+  {
+    "name": "rogue proof is accepted without verification",
+    "sourceDiff": "diff --git a/src/main.ts b/src/main.ts\nindex d493626..948cd5e 100644\n--- a/src/main.ts\n+++ b/src/main.ts\n@@ -1350,7 +1350,7 @@ $('#d-defend').addEventListener('click', async () => {\n     // the rogue key with sk₂ — does NOT verify against the rogue key.\n     const roguePopMsg = hashProofPublicKey(bls, pkBytes(roguePk));\n     const roguePopAttempt = bls.sign(roguePopMsg, attacker.secretKey);\n-    const roguePopValid = bls.verify(roguePopAttempt, roguePopMsg, roguePk);\n+    const roguePopValid = bls.verify(roguePopAttempt, roguePopMsg, roguePk) || true;\n \n     dOutput().innerHTML = `\n       <div class=\"output-block\">\n",
+    "baseline": "073dd0a1f2c5fce2b0a689690c870713bb3864c383269ccaccc499278bf029e1",
+    "mutant": "3458a9c779073dbe45b4885bd08d10fc4cc918254a3d9499ab4cc6014013995c",
+    "namedTest": "rogue-key defense uses the distinct proof domain and rejects the rogue key",
+    "assertionFailure": true,
+    "retries": 0,
+    "restoredGreen": true
+  },
+  {
+    "name": "raw GT diagnostic is called a standardized wire encoding",
+    "sourceDiff": "diff --git a/src/main.ts b/src/main.ts\nindex d493626..cbdf2ff 100644\n--- a/src/main.ts\n+++ b/src/main.ts\n@@ -241,7 +241,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `\n   <details class=\"gory-details\">\n     <summary>The gory details: field towers, embedding degree, and the Ate pairing</summary>\n     <div class=\"gory-body\">\n-      <p>Under the hood, the three groups live in a tower of extension fields built on the 381-bit base prime <em>p</em>. <span class=\"g1\">G₁</span> is a subgroup of the curve over the base field 𝔽<sub>p</sub>; <span class=\"g2\">G₂</span> lives over the quadratic extension 𝔽<sub>p²</sub> (which is why its points are twice as big); and the target <span class=\"gt\">G<sub>T</sub></span> is the order-<em>r</em> subgroup inside 𝔽<sub>p¹²</sub>. This page exposes the library's twelve 48-byte base-field limbs as a <strong>576-byte raw diagnostic value</strong>; that is not a claim that protocols use a standardized 576-byte G<sub>T</sub> wire encoding.</p>\n+      <p>Under the hood, the three groups live in a tower of extension fields built on the 381-bit base prime <em>p</em>. <span class=\"g1\">G₁</span> is a subgroup of the curve over the base field 𝔽<sub>p</sub>; <span class=\"g2\">G₂</span> lives over the quadratic extension 𝔽<sub>p²</sub> (which is why its points are twice as big); and the target <span class=\"gt\">G<sub>T</sub></span> is the order-<em>r</em> subgroup inside 𝔽<sub>p¹²</sub>. This page exposes the library's twelve 48-byte base-field limbs as a <strong>standardized 576-byte G<sub>T</sub> wire encoding</strong> used by protocols.</p>\n       <p>The number 12 is the <strong>embedding degree</strong> <em>k</em>: the smallest <em>k</em> such that the group order <em>r</em> divides <em>p<sup>k</sup> − 1</em>. It has to be small enough that arithmetic in 𝔽<sub>p¹²</sub> is tractable, yet large enough that the discrete log there stays as hard as an RSA key of comparable size — <em>k</em> = 12 is the sweet spot for the ~128-bit security target.</p>\n       <p>The pairing itself is computed as an <strong>optimal Ate pairing</strong>: a Miller loop accumulates line functions, then a <em>final exponentiation</em> by <em>(p¹² − 1)/r</em> maps the Miller-loop result into the prime-order target subgroup G<sub>T</sub>. The demos compare the library's resulting field representation byte-for-byte.</p>\n     </div>\n",
+    "baseline": "073dd0a1f2c5fce2b0a689690c870713bb3864c383269ccaccc499278bf029e1",
+    "mutant": "de2d52a39a146bd1e6369b5baafe535fbfe0718aeff3e4c5e7cc527a794db4ec",
+    "namedTest": "labels the exposed GT bytes as a raw diagnostic rather than a wire standard",
+    "assertionFailure": true,
+    "retries": 0,
+    "restoredGreen": true
+  }
+]
