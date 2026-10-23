@@ -92,5 +92,5 @@ test('rogue-key defense uses the distinct proof domain and rejects the rogue key
 
   await expect(page.locator('#d-output')).toContainText('PoP INVALID — key rejected');
   await expect(page.locator('#d-output')).toContainText('dedicated BLS_POP_… domain');
-  await expect(page.locator('#d-output')).toContainText('Ethereum’s deposit signature serves a related registration purpose');
+  await expect(page.locator('#d-output')).toContainText("Ethereum's deposit signature serves a related registration purpose");
 });
