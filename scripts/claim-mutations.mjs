@@ -123,7 +123,7 @@ const cases = [
     'rogue proof is accepted without verification',
     'src/main.ts',
     '    const roguePopValid = bls.verify(roguePopAttempt, roguePopMsg, roguePk);',
-    '    const roguePopValid = true;',
+    '    const roguePopValid = bls.verify(roguePopAttempt, roguePopMsg, roguePk) || true;',
     browser('rogue-key defense uses the distinct proof domain and rejects the rogue key'),
   ],
   [
